@@ -11,7 +11,7 @@
       <canvas id="game" aria-label="Shadow Heist 게임 화면"></canvas>
 
       <section id="hud" aria-live="polite">
-        <div class="brand"><span>SHADOW</span> HEIST <small>PROTOTYPE 13</small></div>
+        <div class="brand"><span>SHADOW</span> HEIST <small>PROTOTYPE 14</small></div>
         <div class="objective">
           <span class="label">OBJECTIVE</span>
           <strong id="objectiveText">보물을 훔치고 살아서 돌아오세요</strong>
@@ -38,6 +38,19 @@
       <div id="prompt" class="prompt hidden"></div>
       <div id="cameraWarning" class="camera-warning hidden"><span>CAMERA</span><b id="cameraDetection">0%</b></div>
       <div id="securityWarning" class="security-warning hidden"><span>EXIT LOCKDOWN</span><b id="lockdownTime">0.0s</b></div>
+
+      <aside id="devPanel" class="dev-panel" aria-hidden="true">
+        <header><div><span>PLAYTEST TOOLS</span><strong>실시간 진단</strong></div><button id="closeDevPanel" type="button">×</button></header>
+        <pre id="devLiveData"></pre>
+        <div class="dev-options">
+          <label><input id="debugPaths" type="checkbox"> 경비 이동 경로 표시</label>
+          <label><input id="showNoiseWaves" type="checkbox" checked> 플레이어 소음 파동 표시</label>
+        </div>
+        <h3>최근 플레이 기록</h3>
+        <div id="recentRuns" class="recent-runs"></div>
+        <footer><button id="exportRuns" type="button">JSON 내보내기</button><button id="clearRuns" type="button">기록 초기화</button></footer>
+        <small>F2로 열기·닫기</small>
+      </aside>
 
       <section id="startScreen" class="screen visible">
         <div class="eyebrow">TENSION TEST // NIGHT 01</div>

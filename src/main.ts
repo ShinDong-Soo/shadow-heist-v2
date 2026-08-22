@@ -7,6 +7,7 @@ import { doors, keycard, type Door } from './doors';
 import { createSupportGuard, supportPatrol, type GuardActor, type GuardState } from './guards';
 import { lockdownDuration, type LockdownReason } from './security';
 import { createExplorationCells, exploredPercent } from './exploration';
+import { BALANCE } from './balance';
 
 type Point = { x: number; y: number };
 type Rect = { x: number; y: number; w: number; h: number };
@@ -48,6 +49,11 @@ const accessText = document.querySelector<HTMLElement>('#accessText')!;
 const securityWarning = document.querySelector<HTMLElement>('#securityWarning')!;
 const lockdownTimeText = document.querySelector<HTMLElement>('#lockdownTime')!;
 const mapText = document.querySelector<HTMLElement>('#mapText')!;
+const devPanel = document.querySelector<HTMLElement>('#devPanel')!;
+const devLiveData = document.querySelector<HTMLElement>('#devLiveData')!;
+const recentRuns = document.querySelector<HTMLElement>('#recentRuns')!;
+const debugPathsInput = document.querySelector<HTMLInputElement>('#debugPaths')!;
+const showNoiseWavesInput = document.querySelector<HTMLInputElement>('#showNoiseWaves')!;
 
 const VIEW = { w: 1280, h: 720 };
 const WORLD = { w: 1800, h: 1100 };
@@ -62,7 +68,6 @@ const exploredCtx = exploredCanvas.getContext('2d')!;
 const OUTER = 46;
 const PLAYER_RADIUS = 14;
 const GUARD_RADIUS = 16;
-const MIN_PLAYER_VISION = 215;
 const keys = new Set<string>();
 const explorationCells = createExplorationCells(WORLD.w, WORLD.h);
 
@@ -130,6 +135,11 @@ let maxLockdownDuration = 0;
 let explorationTimer = 0;
 let maxExploredPercent = 0;
 const exploredCells = new Set<number>();
+let devPanelOpen = false;
+let debugPaths = false;
+let showNoiseWaves = true;
+let devPanelTimer = 0;
+let currentMovementMode: MovementMode = 'normal';
 let carefulWalkTime = 0;
 let normalWalkTime = 0;
 let crouchTime = 0;
@@ -431,14 +441,13 @@ const audio = new AudioEngine();
 function collectedTreasureCount() { return treasures.filter(item => item.collected).length; }
 
 function currentTake() {
-  const multipliers = [0, 1, 1.15, 1.35];
-  return Math.round(lootScore * multipliers[collectedTreasureCount()]);
+  return Math.round(lootScore * BALANCE.scoring.lootMultipliers[collectedTreasureCount()]);
 }
 
 function calculateFinalScore(won: boolean) {
   if (!won) return 0;
-  const speedBonus = Math.max(0, Math.round(1200 - elapsed * 7));
-  const stealthBonus = spottedCount === 0 ? 1000 : Math.max(0, 500 - spottedCount * 200);
+  const speedBonus = Math.max(0, Math.round(BALANCE.scoring.speedBonusStart - elapsed * BALANCE.scoring.speedPenaltyPerSecond));
+  const stealthBonus = spottedCount === 0 ? BALANCE.scoring.perfectStealthBonus : Math.max(0, 500 - spottedCount * 200);
   return currentTake() + speedBonus + stealthBonus;
 }
 
@@ -564,7 +573,7 @@ function finishGame(won: boolean) {
 
 function savePlaytestRun(won: boolean) {
   const run = {
-    version: 'prototype-13',
+    version: 'prototype-14',
     finishedAt: new Date().toISOString(),
     result: won ? 'escaped' : 'caught',
     duration: Number(elapsed.toFixed(2)),
@@ -625,6 +634,72 @@ function savePlaytestRun(won: boolean) {
     // A blocked storage setting should never stop a run from ending.
   }
   console.info('[Shadow Heist playtest]', run);
+  if (devPanelOpen) renderRecentRuns();
+}
+
+function loadPlaytestRuns(): Record<string, unknown>[] {
+  try {
+    const value = JSON.parse(localStorage.getItem('shadow-heist-playtests') ?? '[]');
+    return Array.isArray(value) ? value.filter(item => item && typeof item === 'object') : [];
+  } catch {
+    return [];
+  }
+}
+
+function renderRecentRuns() {
+  recentRuns.replaceChildren();
+  const runs = loadPlaytestRuns().slice(-5).reverse();
+  if (!runs.length) {
+    const empty = document.createElement('div'); empty.className = 'empty'; empty.textContent = '저장된 플레이 기록이 없습니다.'; recentRuns.append(empty); return;
+  }
+  runs.forEach(run => {
+    const item = document.createElement('article');
+    const result = document.createElement('b');
+    const details = document.createElement('span');
+    result.textContent = run.result === 'escaped' ? '탈출 성공' : '체포';
+    const duration = typeof run.duration === 'number' ? formatTime(run.duration) : '--:--';
+    const loot = typeof run.lootCount === 'number' ? run.lootCount : 0;
+    const score = typeof run.finalScore === 'number' ? run.finalScore.toLocaleString('ko-KR') : '0';
+    details.textContent = `${duration} · 보물 ${loot} · ${score}점`;
+    item.append(result, details); recentRuns.append(item);
+  });
+}
+
+function updateDevPanel(force = false) {
+  if (!devPanelOpen) return;
+  if (!force && devPanelTimer > 0) return;
+  devPanelTimer = .15;
+  const noise = movementNoiseProfile(currentMovementMode, collectedTreasureCount());
+  devLiveData.textContent = [
+    `GAME     ${state.toUpperCase()}  ${formatTime(elapsed)}`,
+    `PLAYER   ${Math.round(player.x)}, ${Math.round(player.y)}  ${currentMovementMode.toUpperCase()}`,
+    `EXPOSURE ${Math.round(playerExposure * 100)}%  NOISE ${noise.radius}px`,
+    `ALPHA    ${guard.state}  ${Math.round(detection * 100)}%`,
+    `BRAVO    ${supportGuard.state}  ${Math.round(supportDetection * 100)}%`,
+    `ALERT    ${alertLevel}  CCTV ${camerasSeeingPlayer.size}`,
+    `MAP      ${maxExploredPercent}%  LOCK ${exitLockdown.toFixed(1)}s`,
+    `RADIO    ${radioMessages}  LOOT ${collectedTreasureCount()}/${treasures.length}`,
+  ].join('\n');
+}
+
+function toggleDevPanel(open = !devPanelOpen) {
+  devPanelOpen = open;
+  devPanel.classList.toggle('visible', open);
+  devPanel.setAttribute('aria-hidden', String(!open));
+  if (open) { renderRecentRuns(); updateDevPanel(true); }
+}
+
+function exportPlaytestRuns() {
+  const blob = new Blob([JSON.stringify(loadPlaytestRuns(), null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url; link.download = `shadow-heist-playtests-${new Date().toISOString().slice(0, 10)}.json`; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function clearPlaytestRuns() {
+  localStorage.removeItem('shadow-heist-playtests');
+  renderRecentRuns();
 }
 
 function setStatus(text: string, danger: boolean, warning = false) {
@@ -680,7 +755,7 @@ function lightLevelAt(point: Point) {
 
 function currentPlayerVision() {
   if (activeHidingSpot) return 125;
-  return MIN_PLAYER_VISION + playerExposure * 112 - (keys.has('c') ? 24 : 0);
+  return BALANCE.player.minimumVision + playerExposure * 112 - (keys.has('c') ? BALANCE.player.crouchVisionPenalty : 0);
 }
 
 function updateExploration(dt: number) {
@@ -697,12 +772,12 @@ function updateExploration(dt: number) {
   mapText.textContent = `${percent}%`;
 }
 
-function playerConcealmentMultiplier() { return keys.has('c') && !activeHidingSpot ? .7 : 1; }
+function playerConcealmentMultiplier() { return keys.has('c') && !activeHidingSpot ? BALANCE.player.crouchDetectionMultiplier : 1; }
 
 function actorCanSeePoint(actor: GuardActor, point: Point, exposure = playerExposure) {
   const chaseVision = actor.state === 'CHASE';
-  const range = ((chaseVision ? 465 : 390) + alertLevel * 18) * (.68 + exposure * .55) * playerConcealmentMultiplier();
-  const angle = chaseVision ? .82 : .56;
+  const range = ((chaseVision ? BALANCE.guard.chaseVision : BALANCE.guard.patrolVision) + alertLevel * 18) * (.68 + exposure * .55) * playerConcealmentMultiplier();
+  const angle = chaseVision ? BALANCE.guard.chaseVisionAngle : BALANCE.guard.patrolVisionAngle;
   const direction = Math.atan2(point.y - actor.y, point.x - actor.x);
   return distance(actor, point) < range && Math.abs(angleDelta(direction, actor.facing)) < angle && hasLineOfSight(actor, point);
 }
@@ -719,7 +794,7 @@ function beginHideCheck(spot: HidingSpot) {
 function cameraCanSeePlayer(camera: CctvCamera, ignoreState = false) {
   if (activeHidingSpot) return false;
   if (!ignoreState && (camera.state === 'DISABLED' || camera.state === 'COOLDOWN')) return false;
-  const range = (camera.range + alertLevel * 18) * (.72 + playerExposure * .42) * playerConcealmentMultiplier();
+  const range = (camera.range + alertLevel * 18) * (BALANCE.cctv.exposureRangeBase + playerExposure * BALANCE.cctv.exposureRangeWeight) * playerConcealmentMultiplier();
   const direction = Math.atan2(player.y - camera.y, player.x - camera.x);
   return distance(camera, player) < range && Math.abs(angleDelta(direction, camera.facing)) < .43 && hasLineOfSight(camera, player);
 }
@@ -787,7 +862,7 @@ function updateCctvs(dt: number, now: number) {
       if (!camerasSeeingPlayer.has(camera.id)) { cctvSightEntries++; logPlaytestEvent(`cctv:entered:${camera.id}`); }
       camerasSeeingPlayer.add(camera.id);
       camera.state = 'DETECTING';
-      const rate = (.58 + playerExposure * .72 + alertLevel * .11) * playerConcealmentMultiplier();
+      const rate = (BALANCE.cctv.detectionBase + playerExposure * BALANCE.cctv.detectionExposureWeight + alertLevel * BALANCE.cctv.detectionAlertWeight) * playerConcealmentMultiplier();
       camera.detection = Math.min(1, camera.detection + dt * rate);
       if (camera.detection >= 1) triggerCctvAlert(camera);
     } else {
@@ -1037,6 +1112,7 @@ function updateSupportGuard(dt: number) {
 function update(dt: number, now: number) {
   if (state !== 'playing') return;
   elapsed += dt;
+  devPanelTimer = Math.max(0, devPanelTimer - dt);
   radioCooldown = Math.max(0, radioCooldown - dt);
   updateExitLockdown(dt, now);
   stateFlash = Math.max(0, stateFlash - dt * 2.2);
@@ -1046,8 +1122,8 @@ function update(dt: number, now: number) {
   const len = Math.hypot(xInput, yInput) || 1;
   const careful = keys.has('shift');
   const crouching = keys.has('c');
-  const movementMode: MovementMode = crouching ? 'crouch' : careful ? 'careful' : 'normal';
-  const speed = crouching ? 88 : careful ? 118 : 205;
+  currentMovementMode = crouching ? 'crouch' : careful ? 'careful' : 'normal';
+  const speed = crouching ? BALANCE.player.crouchSpeed : careful ? BALANCE.player.carefulSpeed : BALANCE.player.normalSpeed;
   const tx = xInput / len * speed; const ty = yInput / len * speed;
   player.vx += (tx - player.vx) * Math.min(1, dt * 12);
   player.vy += (ty - player.vy) * Math.min(1, dt * 12);
@@ -1058,11 +1134,11 @@ function update(dt: number, now: number) {
   playerStepTimer -= dt;
   if (playerMoving) {
     if (crouching) crouchTime += dt; else if (careful) carefulWalkTime += dt; else normalWalkTime += dt;
-    if (playerStepTimer <= 0) emitPlayerFootstep(movementMode);
+    if (playerStepTimer <= 0) emitPlayerFootstep(currentMovementMode);
   } else playerStepTimer = Math.min(playerStepTimer, .08);
   noisePulses.forEach(pulse => { pulse.age += dt; });
   for (let i = noisePulses.length - 1; i >= 0; i--) if (noisePulses[i].age >= noisePulses[i].duration) noisePulses.splice(i, 1);
-  updateNoiseHud(movementMode, playerMoving);
+  updateNoiseHud(currentMovementMode, playerMoving);
   if (activeHidingSpot) hidingTime += dt;
   const exposureTarget = lightLevelAt(player);
   playerExposure += (exposureTarget - playerExposure) * Math.min(1, dt * 6);
@@ -1210,6 +1286,7 @@ function update(dt: number, now: number) {
   camera.x += (camTargetX - camera.x) * Math.min(1, dt * 5);
   camera.y += (camTargetY - camera.y) * Math.min(1, dt * 5);
   shake *= Math.max(0, 1 - dt * 6);
+  updateDevPanel();
 }
 
 function enterHiding(spot: HidingSpot) {
@@ -1380,7 +1457,7 @@ function draw() {
   ctx.clearRect(0, 0, VIEW.w, VIEW.h);
   const sx = shake ? (Math.random() - .5) * shake : 0; const sy = shake ? (Math.random() - .5) * shake : 0;
   ctx.save(); ctx.translate(-camera.x + sx, -camera.y + sy);
-  drawFloor(); drawObjects(); drawDoors(); drawLighting(); drawLightSwitches(); drawHidingSpots(); drawCctvSystem(); drawGuardVision(); drawExit(); drawTreasures(); drawKeycard(); drawNoisePulses(); drawGuard(); drawPlayer(); drawForegroundFaces(); drawFog();
+  drawFloor(); drawObjects(); drawDoors(); drawLighting(); drawLightSwitches(); drawHidingSpots(); drawCctvSystem(); drawGuardVision(); drawExit(); drawTreasures(); drawKeycard(); if (showNoiseWaves) drawNoisePulses(); drawGuard(); drawPlayer(); drawForegroundFaces(); drawFog(); if (debugPaths) drawGuardPaths();
   ctx.restore();
   if (Math.max(detection, supportDetection) > 0 && state === 'playing') drawDetectionVignette();
   if (alertLevel > 0 && state === 'playing') drawAlarmAtmosphere();
@@ -1690,6 +1767,18 @@ function drawNoisePulses() {
   });
 }
 
+function drawGuardPaths() {
+  const paths: Array<{ actor: GuardActor; color: string }> = [{ actor: guard, color: '#d6ab54' }, { actor: supportGuard, color: '#7da8c3' }];
+  paths.forEach(({ actor, color }) => {
+    const points = actor.path.slice(actor.pathIndex);
+    if (!points.length) return;
+    ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2; ctx.setLineDash([5, 5]);
+    ctx.beginPath(); ctx.moveTo(actor.x, actor.y); points.forEach(point => ctx.lineTo(point.x, point.y)); ctx.stroke();
+    points.forEach(point => { ctx.beginPath(); ctx.arc(point.x, point.y, 3, 0, Math.PI * 2); ctx.fill(); });
+    ctx.restore();
+  });
+}
+
 function drawGuard() {
   drawGuardActor(guard, '#d6ab54');
   drawGuardActor(supportGuard, '#7da8c3');
@@ -1827,6 +1916,7 @@ function frame(now: number) {
 }
 
 addEventListener('keydown', e => {
+  if (e.key === 'F2') { e.preventDefault(); toggleDevPanel(); return; }
   keys.add(e.key.toLowerCase());
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
   if (e.key.toLowerCase() === 'e' && !e.repeat) interact();
@@ -1835,6 +1925,13 @@ addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
 addEventListener('blur', () => keys.clear());
 document.querySelector('#startButton')!.addEventListener('click', startGame);
 document.querySelector('#retryButton')!.addEventListener('click', startGame);
+document.querySelector('#closeDevPanel')!.addEventListener('click', () => toggleDevPanel(false));
+document.querySelector('#exportRuns')!.addEventListener('click', exportPlaytestRuns);
+document.querySelector('#clearRuns')!.addEventListener('click', () => {
+  if (confirm('저장된 플레이테스트 기록을 모두 지울까요?')) clearPlaytestRuns();
+});
+debugPathsInput.addEventListener('change', () => { debugPaths = debugPathsInput.checked; });
+showNoiseWavesInput.addEventListener('change', () => { showNoiseWaves = showNoiseWavesInput.checked; });
 
 validateCctvCoverage();
 camera.x = 0; camera.y = WORLD.h - VIEW.h; requestAnimationFrame(frame);

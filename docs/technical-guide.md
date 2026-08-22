@@ -59,6 +59,7 @@ SHADOW-HEIST_V2/
 ├─ tsconfig.json
 ├─ src/
 │  ├─ main.ts
+│  ├─ balance.ts
 │  ├─ cctv.ts
 │  ├─ doors.ts
 │  ├─ exploration.ts
@@ -73,6 +74,7 @@ SHADOW-HEIST_V2/
 
 - `index.html`: Canvas, 시작 화면, HUD, 결과 화면의 HTML 구조
 - `src/main.ts`: 게임 상태, 이동, AI, 시야, 조명, 사운드, 렌더링
+- `src/balance.ts`: 플레이어, 소음, 경비, CCTV, 점수, 봉쇄의 주요 조정 수치
 - `src/cctv.ts`: CCTV와 제어반의 종류, 위치, 초기 상태
 - `src/doors.ts`: 문과 키카드의 이름, 위치, 잠금 및 초기 상태
 - `src/exploration.ts`: 탐색률 계산에 사용하는 격자 생성과 백분율 계산

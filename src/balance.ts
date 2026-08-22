@@ -1,0 +1,48 @@
+export const BALANCE = {
+  player: {
+    normalSpeed: 205,
+    carefulSpeed: 118,
+    crouchSpeed: 88,
+    minimumVision: 215,
+    crouchVisionPenalty: 24,
+    crouchDetectionMultiplier: .7,
+  },
+  noise: {
+    normalRadius: 285,
+    normalLootBonus: 14,
+    normalInterval: .34,
+    carefulRadius: 105,
+    carefulLootBonus: 8,
+    carefulInterval: .58,
+    crouchRadius: 65,
+    crouchLootBonus: 6,
+    crouchInterval: .72,
+    wallMultiplier: .58,
+    alertMultiplier: .06,
+  },
+  guard: {
+    patrolVision: 390,
+    chaseVision: 465,
+    patrolVisionAngle: .56,
+    chaseVisionAngle: .82,
+  },
+  cctv: {
+    exposureRangeBase: .72,
+    exposureRangeWeight: .42,
+    detectionBase: .58,
+    detectionExposureWeight: .72,
+    detectionAlertWeight: .11,
+  },
+  scoring: {
+    lootMultipliers: [0, 1, 1.15, 1.35],
+    speedBonusStart: 1200,
+    speedPenaltyPerSecond: 7,
+    perfectStealthBonus: 1000,
+  },
+  lockdown: {
+    cctvBase: 7,
+    cctvPerAlert: 2,
+    finalLootBase: 11,
+    finalLootPerAlert: 1.5,
+  },
+} as const;

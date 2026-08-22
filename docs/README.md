@@ -13,7 +13,8 @@
 5. [CCTV](cctv.md)
 6. [문과 출입 권한](doors-and-access.md)
 7. [강탈과 점수](heist-and-scoring.md)
-8. 관심 있는 나머지 분야
+8. [플레이테스트 도구와 밸런스](playtest-tools.md)
+9. 관심 있는 나머지 분야
 
 ## 분야별 문서
 
@@ -29,6 +30,7 @@
 | [강탈과 점수](heist-and-scoring.md) | 보물, 선택 탈출, 출구 봉쇄, 경계 단계, 점수 계산 |
 | [UI와 그래픽](ui-and-visuals.md) | HUD, 시작·결과 화면, 캐릭터, Fake 2.5D |
 | [플레이테스트](playtest.md) | 테스트 질문, 저장 데이터, 확인 목록 |
+| [플레이테스트 도구와 밸런스](playtest-tools.md) | F2 진단 패널, 기록 내보내기, 밸런스 수치 수정 |
 | [기술 안내](technical-guide.md) | 기술 구성, 실행, 빌드, 폴더 구조 |
 | [변경 이력](changelog.md) | 프로토타입 버전별 변경 분야 |
 

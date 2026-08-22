@@ -1,3 +1,5 @@
+import { BALANCE } from './balance';
+
 export type NoisePoint = { x: number; y: number };
 
 export type NoisePulse = NoisePoint & {
@@ -16,13 +18,13 @@ export type MovementNoiseProfile = {
 
 export function movementNoiseProfile(mode: MovementMode, lootCount: number): MovementNoiseProfile {
   // 보물이 늘수록 가방이 무거워져 발소리가 조금 더 멀리 전달된다.
-  if (mode === 'crouch') return { radius: 65 + lootCount * 6, interval: .72 };
-  if (mode === 'careful') return { radius: 105 + lootCount * 8, interval: .58 };
-  return { radius: 285 + lootCount * 14, interval: .34 };
+  if (mode === 'crouch') return { radius: BALANCE.noise.crouchRadius + lootCount * BALANCE.noise.crouchLootBonus, interval: BALANCE.noise.crouchInterval };
+  if (mode === 'careful') return { radius: BALANCE.noise.carefulRadius + lootCount * BALANCE.noise.carefulLootBonus, interval: BALANCE.noise.carefulInterval };
+  return { radius: BALANCE.noise.normalRadius + lootCount * BALANCE.noise.normalLootBonus, interval: BALANCE.noise.normalInterval };
 }
 
 export function effectiveHearingRadius(radius: number, wallBlocked: boolean, alertLevel: number) {
-  const wallMultiplier = wallBlocked ? .58 : 1;
-  const alertMultiplier = 1 + alertLevel * .06;
+  const wallMultiplier = wallBlocked ? BALANCE.noise.wallMultiplier : 1;
+  const alertMultiplier = 1 + alertLevel * BALANCE.noise.alertMultiplier;
   return radius * wallMultiplier * alertMultiplier;
 }
