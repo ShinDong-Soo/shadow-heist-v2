@@ -1,2 +1,30 @@
-# shadow-heist-v2
-A browser-based stealth heist game built with Codex for OpenAI Game Builders Seoul 2026.
+# Shadow Heist V2
+
+보이지 않는 경비원의 위치를 빛과 소리로 추측하며 보물을 훔치는 브라우저 스텔스 게임 프로토타입입니다.
+
+분야별 구현 내역과 시스템 규칙은 [개발 문서 목차](docs/README.md)에서 확인할 수 있습니다.
+
+## 실행
+
+```bash
+npm install
+npm run dev
+```
+
+## 조작
+
+- `WASD` / 방향키: 이동
+- `Shift`: 조심히 걷기
+- `E`: 보물 획득, 숨기·나오기, 조명 스위치 조작, 출구 탈출
+
+## 현재 목표
+
+가치가 다른 보물 세 개 중 하나 이상을 훔친 뒤 시작 지점의 출구로 돌아오면 성공합니다. 추가 보물을 노릴수록 점수와 경계 단계가 함께 증가합니다.
+
+경비원의 시야와 접근음을 피하고, 조명과 은신처를 이용해 탈출해야 합니다. 체포되면 해당 판에서 얻은 점수를 모두 잃습니다.
+
+## 빌드 검사
+
+```bash
+npm run build
+```

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#070a0c" />
+    <title>SHADOW HEIST — Tension Prototype</title>
+  </head>
+  <body>
+    <main id="app">
+      <canvas id="game" aria-label="Shadow Heist 게임 화면"></canvas>
+
+      <section id="hud" aria-live="polite">
+        <div class="brand"><span>SHADOW</span> HEIST <small>PROTOTYPE 05</small></div>
+        <div class="objective">
+          <span class="label">OBJECTIVE</span>
+          <strong id="objectiveText">보물을 훔치고 살아서 돌아오세요</strong>
+        </div>
+        <div class="status" id="statusBadge"><i></i><span>미탐지</span></div>
+      </section>
+
+      <section id="soundMeter" aria-label="경비원 접근 소리">
+        <span class="sound-label">접근음</span>
+        <div class="bars"><i></i><i></i><i></i><i></i><i></i></div>
+        <span id="soundDirection">·</span>
+      </section>
+
+      <section id="missionData" aria-label="강탈 현황">
+        <div><span>LOOT</span><b id="lootCount">0 / 3</b></div>
+        <div><span>TAKE</span><b id="scorePreview">0</b></div>
+        <div class="exposure-readout"><span>EXPOSURE</span><b id="exposureText">어두움</b><i></i><i></i><i></i></div>
+        <div class="alert-readout"><span>ALERT</span><b id="alertText">LEVEL 0</b><i></i><i></i><i></i></div>
+      </section>
+
+      <div id="prompt" class="prompt hidden"></div>
+
+      <section id="startScreen" class="screen visible">
+        <div class="eyebrow">TENSION TEST // NIGHT 01</div>
+        <h1>소리만 믿고<br><em>훔쳐라.</em></h1>
+        <p>경비원은 어둠 속에 있습니다. 발소리의 방향과 크기를 읽고<br>보물을 챙겨 입구로 돌아오세요.</p>
+        <button id="startButton">잠입 시작 <span>→</span></button>
+        <div class="controls"><b>WASD / 방향키</b> 이동 <b>SHIFT</b> 조심히 걷기 <b>E</b> 상호작용</div>
+      </section>
+
+      <section id="resultScreen" class="screen">
+        <div class="eyebrow" id="resultEyebrow">MISSION REPORT</div>
+        <h2 id="resultTitle">HEIST COMPLETE</h2>
+        <p id="resultMessage"></p>
+        <div class="report">
+          <span>확보 보물 <b id="resultLoot">0 / 3</b></span>
+          <span>최종 점수 <b id="resultScore">0</b></span>
+          <span>소요 시간 <b id="resultTime">00:00</b></span>
+          <span>발각 횟수 <b id="resultSpotted">0</b></span>
+          <span>최고 감지 <b id="resultDetection">0%</b></span>
+          <span>추격 시간 <b id="resultChase">0.0s</b></span>
+        </div>
+        <button id="retryButton">다시 잠입 <span>↻</span></button>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
