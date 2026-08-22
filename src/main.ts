@@ -1,5 +1,12 @@
 import './style.css';
 import { hidingSpots, type HidingSpot } from './hiding';
+import { cctvCameras, cctvPanels, type CctvCamera } from './cctv';
+import { castVisionRay, hasVisionLine } from './vision';
+import { effectiveHearingRadius, movementNoiseProfile, type MovementMode, type NoisePulse } from './noise';
+import { doors, keycard, type Door } from './doors';
+import { createSupportGuard, supportPatrol, type GuardActor, type GuardState } from './guards';
+import { lockdownDuration, type LockdownReason } from './security';
+import { createExplorationCells, exploredPercent } from './exploration';
 
 type Point = { x: number; y: number };
 type Rect = { x: number; y: number; w: number; h: number };
@@ -7,7 +14,6 @@ type Treasure = Point & { id: string; name: string; value: number; color: string
 type LightSource = Point & { id: string; radius: number; intensity: number; color: string; group: string; on: boolean; defaultOn: boolean; linkedTreasure?: string; emergencyLevel?: number; flicker?: boolean };
 type LightSwitch = Point & { id: string; group: string; used: boolean };
 type GameState = 'menu' | 'playing' | 'won' | 'caught';
-type GuardState = 'PATROL' | 'SUSPICIOUS' | 'INVESTIGATE' | 'CHASE' | 'SEARCH' | 'HIDE_CHECK';
 type PlaytestEvent = { time: number; type: string; x: number; y: number };
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game')!;
@@ -34,6 +40,14 @@ const alertText = document.querySelector<HTMLElement>('#alertText')!;
 const alertReadout = document.querySelector<HTMLElement>('.alert-readout')!;
 const exposureText = document.querySelector<HTMLElement>('#exposureText')!;
 const exposureReadout = document.querySelector<HTMLElement>('.exposure-readout')!;
+const cameraWarning = document.querySelector<HTMLElement>('#cameraWarning')!;
+const cameraDetection = document.querySelector<HTMLElement>('#cameraDetection')!;
+const noiseText = document.querySelector<HTMLElement>('#noiseText')!;
+const noiseReadout = document.querySelector<HTMLElement>('.noise-readout')!;
+const accessText = document.querySelector<HTMLElement>('#accessText')!;
+const securityWarning = document.querySelector<HTMLElement>('#securityWarning')!;
+const lockdownTimeText = document.querySelector<HTMLElement>('#lockdownTime')!;
+const mapText = document.querySelector<HTMLElement>('#mapText')!;
 
 const VIEW = { w: 1280, h: 720 };
 const WORLD = { w: 1800, h: 1100 };
@@ -41,11 +55,16 @@ const fogCanvas = document.createElement('canvas');
 fogCanvas.width = WORLD.w;
 fogCanvas.height = WORLD.h;
 const fogCtx = fogCanvas.getContext('2d')!;
+const exploredCanvas = document.createElement('canvas');
+exploredCanvas.width = WORLD.w;
+exploredCanvas.height = WORLD.h;
+const exploredCtx = exploredCanvas.getContext('2d')!;
 const OUTER = 46;
 const PLAYER_RADIUS = 14;
 const GUARD_RADIUS = 16;
 const MIN_PLAYER_VISION = 215;
 const keys = new Set<string>();
+const explorationCells = createExplorationCells(WORLD.w, WORLD.h);
 
 const walls: Rect[] = [
   { x: 0, y: 0, w: WORLD.w, h: OUTER }, { x: 0, y: WORLD.h - OUTER, w: WORLD.w, h: OUTER },
@@ -53,12 +72,14 @@ const walls: Rect[] = [
   { x: 310, y: 46, w: 32, h: 250 }, { x: 310, y: 420, w: 32, h: 250 }, { x: 310, y: 800, w: 32, h: 254 },
   { x: 650, y: 220, w: 32, h: 255 }, { x: 650, y: 595, w: 32, h: 245 },
   { x: 1010, y: 46, w: 32, h: 205 }, { x: 1010, y: 370, w: 32, h: 285 }, { x: 1010, y: 775, w: 32, h: 279 },
+  { x: 1370, y: 46, w: 32, h: 74 }, { x: 1370, y: 210, w: 32, h: 45 },
   { x: 1370, y: 255, w: 32, h: 225 }, { x: 1370, y: 600, w: 32, h: 260 },
   { x: 342, y: 295, w: 190, h: 32 }, { x: 650, y: 840, w: 220, h: 32 },
   { x: 1042, y: 655, w: 190, h: 32 }, { x: 1402, y: 480, w: 352, h: 32 },
   { x: 1160, y: 160, w: 130, h: 52 }, { x: 1510, y: 180, w: 90, h: 190 },
   { x: 430, y: 720, w: 120, h: 70 }, { x: 780, y: 370, w: 110, h: 55 },
 ];
+const explorableCells = explorationCells.filter(cell => !walls.some(wall => cell.x >= wall.x && cell.x <= wall.x + wall.w && cell.y >= wall.y && cell.y <= wall.y + wall.h));
 
 const labels = [
   { x: 125, y: 185, text: '서관' }, { x: 450, y: 180, text: '조각 회랑' },
@@ -89,6 +110,40 @@ let safeHides = 0;
 let hideChecks = 0;
 let hiddenCaptures = 0;
 let noiseInvestigations = 0;
+let playerFootsteps = 0;
+let heardFootsteps = 0;
+let footstepInvestigations = 0;
+let doorsOpened = 0;
+let doorsClosed = 0;
+let lockedAttempts = 0;
+let doorNoiseInvestigations = 0;
+let supportDetection = 0;
+let radioMessages = 0;
+let sharedInvestigations = 0;
+let radioCooldown = 0;
+let exitLockdown = 0;
+let lockdownsTriggered = 0;
+let lockdownExtensions = 0;
+let blockedExitAttempts = 0;
+let lockdownSurvivalTime = 0;
+let maxLockdownDuration = 0;
+let explorationTimer = 0;
+let maxExploredPercent = 0;
+const exploredCells = new Set<number>();
+let carefulWalkTime = 0;
+let normalWalkTime = 0;
+let crouchTime = 0;
+let playerStepTimer = 0;
+const noisePulses: NoisePulse[] = [];
+let cctvSightEntries = 0;
+let cctvAlerts = 0;
+let cctvPanelsUsed = 0;
+let disabledPasses = 0;
+let cctvBlindTime = 0;
+let maxCctvDetection = 0;
+let lastCctvAlertAt = -1;
+let caughtAfterCctv = -1;
+const camerasSeeingPlayer = new Set<string>();
 let spottedCount = 0;
 let elapsed = 0;
 let lastTime = performance.now();
@@ -134,8 +189,8 @@ const patrol: Point[] = [
   { x: 900, y: 735 }, { x: 900, y: 920 }, { x: 590, y: 930 }, { x: 590, y: 565 },
   { x: 530, y: 565 },
 ];
-const guard = {
-  x: 530, y: 510, facing: 0, target: 1,
+const guard: GuardActor = {
+  id: 'guard-alpha', name: '경비 알파', x: 530, y: 510, facing: 0, target: 1,
   state: 'PATROL' as GuardState,
   stateTime: 0,
   lostSightTime: 0,
@@ -148,6 +203,7 @@ const guard = {
   repathTimer: 0,
   suspectedHideId: null as string | null,
 };
+const supportGuard = createSupportGuard();
 
 class AudioEngine {
   context?: AudioContext;
@@ -155,6 +211,8 @@ class AudioEngine {
   nextStep = 0;
   nextAlarm = 0;
   nextHum = 0;
+  nextCameraMotor = 0;
+  nextLockdownPulse = 0;
 
   start() {
     if (this.context) return;
@@ -211,7 +269,7 @@ class AudioEngine {
   }
 
   updateAlarm(now: number) {
-    if (!this.context || !this.master || !treasureTaken || state !== 'playing' || now < this.nextAlarm) return;
+    if (!this.context || !this.master || alertLevel === 0 || state !== 'playing' || now < this.nextAlarm) return;
     this.nextAlarm = now + Math.max(1450, 3100 - alertLevel * 450);
     const t = this.context.currentTime;
     const osc = this.context.createOscillator();
@@ -277,6 +335,96 @@ class AudioEngine {
     gain.gain.setValueAtTime(.0001, t); gain.gain.exponentialRampToValueAtTime(.045, t + .03); gain.gain.exponentialRampToValueAtTime(.0001, t + .34);
     osc.connect(gain).connect(this.master); osc.start(t); osc.stop(t + .36);
   }
+
+  cameraMotor(now: number, proximity: number) {
+    if (!this.context || !this.master || state !== 'playing' || proximity <= 0 || now < this.nextCameraMotor) return;
+    this.nextCameraMotor = now + 720;
+    const t = this.context.currentTime;
+    const osc = this.context.createOscillator(); const gain = this.context.createGain();
+    osc.type = 'square'; osc.frequency.setValueAtTime(38, t); osc.frequency.linearRampToValueAtTime(54, t + .12);
+    gain.gain.setValueAtTime(.0001, t); gain.gain.exponentialRampToValueAtTime(.009 * proximity, t + .025); gain.gain.exponentialRampToValueAtTime(.0001, t + .15);
+    osc.connect(gain).connect(this.master); osc.start(t); osc.stop(t + .16);
+  }
+
+  cameraAlert() {
+    if (!this.context || !this.master) return;
+    const t = this.context.currentTime;
+    [0, .11].forEach(delay => {
+      const osc = this.context!.createOscillator(); const gain = this.context!.createGain();
+      osc.type = 'square'; osc.frequency.value = 640;
+      gain.gain.setValueAtTime(.0001, t + delay); gain.gain.exponentialRampToValueAtTime(.055, t + delay + .01); gain.gain.exponentialRampToValueAtTime(.0001, t + delay + .08);
+      osc.connect(gain).connect(this.master!); osc.start(t + delay); osc.stop(t + delay + .09);
+    });
+  }
+
+  cameraPanel() {
+    if (!this.context || !this.master) return;
+    const t = this.context.currentTime;
+    const osc = this.context.createOscillator(); const gain = this.context.createGain();
+    osc.type = 'square'; osc.frequency.setValueAtTime(420, t); osc.frequency.setValueAtTime(220, t + .08);
+    gain.gain.setValueAtTime(.035, t); gain.gain.exponentialRampToValueAtTime(.0001, t + .17);
+    osc.connect(gain).connect(this.master); osc.start(t); osc.stop(t + .18);
+  }
+
+  door(action: 'open' | 'close' | 'locked' | 'keycard') {
+    if (!this.context || !this.master) return;
+    const t = this.context.currentTime;
+    const osc = this.context.createOscillator(); const gain = this.context.createGain(); const filter = this.context.createBiquadFilter();
+    osc.type = action === 'locked' ? 'square' : action === 'keycard' ? 'sine' : 'triangle';
+    const start = action === 'open' ? 78 : action === 'close' ? 112 : action === 'locked' ? 54 : 620;
+    const end = action === 'open' ? 145 : action === 'close' ? 52 : action === 'locked' ? 42 : 920;
+    osc.frequency.setValueAtTime(start, t); osc.frequency.exponentialRampToValueAtTime(end, t + .16);
+    filter.type = 'lowpass'; filter.frequency.value = action === 'keycard' ? 1800 : 650;
+    gain.gain.setValueAtTime(.0001, t); gain.gain.exponentialRampToValueAtTime(action === 'locked' ? .028 : .04, t + .012); gain.gain.exponentialRampToValueAtTime(.0001, t + .2);
+    osc.connect(gain).connect(filter).connect(this.master); osc.start(t); osc.stop(t + .22);
+  }
+
+  radio() {
+    if (!this.context || !this.master) return;
+    const t = this.context.currentTime;
+    [0, .07, .18].forEach((delay, index) => {
+      const osc = this.context!.createOscillator(); const gain = this.context!.createGain();
+      osc.type = 'square'; osc.frequency.value = [880, 620, 760][index];
+      gain.gain.setValueAtTime(.0001, t + delay); gain.gain.exponentialRampToValueAtTime(.018, t + delay + .008); gain.gain.exponentialRampToValueAtTime(.0001, t + delay + .045);
+      osc.connect(gain).connect(this.master!); osc.start(t + delay); osc.stop(t + delay + .055);
+    });
+  }
+
+  securityCue(unlocked: boolean) {
+    if (!this.context || !this.master) return;
+    const t = this.context.currentTime;
+    const notes = unlocked ? [330, 495] : [190, 125];
+    notes.forEach((frequency, index) => {
+      const osc = this.context!.createOscillator(); const gain = this.context!.createGain();
+      osc.type = unlocked ? 'sine' : 'sawtooth'; osc.frequency.value = frequency;
+      const at = t + index * .14;
+      gain.gain.setValueAtTime(.0001, at); gain.gain.exponentialRampToValueAtTime(unlocked ? .035 : .05, at + .015); gain.gain.exponentialRampToValueAtTime(.0001, at + .18);
+      osc.connect(gain).connect(this.master!); osc.start(at); osc.stop(at + .2);
+    });
+  }
+
+  lockdownPulse(now: number, remaining: number) {
+    if (!this.context || !this.master || remaining <= 0 || now < this.nextLockdownPulse) return;
+    this.nextLockdownPulse = now + (remaining < 4 ? 520 : 900);
+    const t = this.context.currentTime; const osc = this.context.createOscillator(); const gain = this.context.createGain();
+    osc.type = 'square'; osc.frequency.value = remaining < 4 ? 510 : 390;
+    gain.gain.setValueAtTime(.0001, t); gain.gain.exponentialRampToValueAtTime(.018, t + .008); gain.gain.exponentialRampToValueAtTime(.0001, t + .07);
+    osc.connect(gain).connect(this.master); osc.start(t); osc.stop(t + .08);
+  }
+
+  playerStep(mode: MovementMode) {
+    if (!this.context || !this.master) return;
+    const careful = mode !== 'normal';
+    const crouching = mode === 'crouch';
+    const t = this.context.currentTime;
+    const osc = this.context.createOscillator(); const gain = this.context.createGain(); const filter = this.context.createBiquadFilter();
+    osc.type = careful ? 'sine' : 'triangle';
+    osc.frequency.setValueAtTime(crouching ? 82 : careful ? 105 : 135, t);
+    osc.frequency.exponentialRampToValueAtTime(crouching ? 48 : careful ? 62 : 48, t + .09);
+    filter.type = 'lowpass'; filter.frequency.value = crouching ? 380 : careful ? 520 : 900;
+    gain.gain.setValueAtTime(.0001, t); gain.gain.exponentialRampToValueAtTime(crouching ? .005 : careful ? .009 : .022, t + .008); gain.gain.exponentialRampToValueAtTime(.0001, t + .11);
+    osc.connect(gain).connect(filter).connect(this.master); osc.start(t); osc.stop(t + .12);
+  }
 }
 const audio = new AudioEngine();
 
@@ -308,20 +456,74 @@ function updateExposureHud() {
   exposureReadout.className = `exposure-readout ${tone}`;
 }
 
+function updateNoiseHud(mode: MovementMode, moving: boolean) {
+  const tone = !moving ? 'silent' : mode === 'crouch' ? 'crouch' : mode === 'careful' ? 'quiet' : 'loud';
+  noiseText.textContent = tone === 'silent' ? '정지' : tone === 'crouch' ? '웅크림' : tone === 'quiet' ? '조용함' : '발소리';
+  noiseReadout.className = `noise-readout ${tone}`;
+}
+
+function triggerExitLockdown(reason: LockdownReason) {
+  const duration = lockdownDuration(reason, alertLevel);
+  if (exitLockdown > 0) {
+    if (duration <= exitLockdown) return;
+    lockdownExtensions++;
+  } else lockdownsTriggered++;
+  exitLockdown = Math.max(exitLockdown, duration);
+  maxLockdownDuration = Math.max(maxLockdownDuration, exitLockdown);
+  securityWarning.classList.remove('hidden');
+  objectiveText.textContent = '출구 봉쇄 — 경비를 피해 버티세요';
+  audio.securityCue(false);
+  stateFlash = Math.max(stateFlash, .5);
+  logPlaytestEvent(`lockdown:start:${reason}`);
+}
+
+function updateExitLockdown(dt: number, now: number) {
+  if (exitLockdown <= 0) return;
+  const before = exitLockdown;
+  exitLockdown = Math.max(0, exitLockdown - dt);
+  lockdownSurvivalTime += dt;
+  lockdownTimeText.textContent = `${exitLockdown.toFixed(1)}s`;
+  audio.lockdownPulse(now, exitLockdown);
+  if (before > 0 && exitLockdown === 0) {
+    securityWarning.classList.add('hidden');
+    objectiveText.textContent = collectedTreasureCount() === treasures.length ? '모든 보물 확보 — 출구로 탈출하세요' : '출구 봉쇄 해제 — 지금 탈출할 수 있습니다';
+    audio.securityCue(true);
+    logPlaytestEvent('lockdown:released');
+  }
+}
+
 function resetGame() {
   player.x = 135; player.y = 940; player.vx = 0; player.vy = 0; player.facing = -Math.PI / 2;
   guard.x = 530; guard.y = 510; guard.facing = 0; guard.target = 1; guard.state = 'PATROL';
   guard.stateTime = 0; guard.lostSightTime = 0; guard.searchStep = 0;
   guard.path = []; guard.pathIndex = 0; guard.repathTimer = 0; guard.suspectedHideId = null;
-  audio.nextAlarm = 0; audio.nextHum = 0;
+  const freshSupport = createSupportGuard(); Object.assign(supportGuard, freshSupport);
+  audio.nextAlarm = 0; audio.nextHum = 0; audio.nextCameraMotor = 0;
   treasures.forEach(item => { item.collected = false; });
   lightSources.forEach(light => { light.on = light.defaultOn; });
   lightSwitches.forEach(item => { item.used = false; });
+  cctvCameras.forEach(camera => {
+    camera.facing = (camera.minAngle + camera.maxAngle) / 2; camera.direction = 1; camera.state = 'SCAN';
+    camera.stateTime = 0; camera.detection = 0; camera.disabledTime = 0; camera.disabledPassRecorded = false;
+  });
+  cctvPanels.forEach(panel => { panel.used = false; });
+  doors.forEach(door => { door.open = door.defaultOpen; });
+  keycard.collected = false;
+  lightPolygonCache.clear();
   treasureTaken = false; alertLevel = 0; lootScore = 0; finalScore = 0;
   playerExposure = .12;
   maxExposure = .12; brightTime = 0; darkTime = 0; switchesUsed = 0;
   activeHidingSpot = null; hidingTime = 0; hideEntries = 0; safeHides = 0;
   hideChecks = 0; hiddenCaptures = 0; noiseInvestigations = 0;
+  playerFootsteps = 0; heardFootsteps = 0; footstepInvestigations = 0; carefulWalkTime = 0; normalWalkTime = 0; crouchTime = 0;
+  doorsOpened = 0; doorsClosed = 0; lockedAttempts = 0; doorNoiseInvestigations = 0;
+  supportDetection = 0; radioMessages = 0; sharedInvestigations = 0; radioCooldown = 0;
+  exitLockdown = 0; lockdownsTriggered = 0; lockdownExtensions = 0; blockedExitAttempts = 0;
+  lockdownSurvivalTime = 0; maxLockdownDuration = 0; audio.nextLockdownPulse = 0;
+  explorationTimer = 0; maxExploredPercent = 0; exploredCells.clear(); exploredCtx.clearRect(0, 0, WORLD.w, WORLD.h);
+  playerStepTimer = 0; noisePulses.length = 0;
+  cctvSightEntries = 0; cctvAlerts = 0; cctvPanelsUsed = 0; disabledPasses = 0;
+  cctvBlindTime = 0; maxCctvDetection = 0; lastCctvAlertAt = -1; caughtAfterCctv = -1; camerasSeeingPlayer.clear();
   spottedCount = 0; elapsed = 0; detection = 0; shake = 0;
   stateFlash = 0; treasureBeat = 0;
   maxDetection = 0; chaseTime = 0; closeCalls = 0; playtestEvents = [];
@@ -329,6 +531,11 @@ function resetGame() {
   setStatus('미탐지', false);
   updateMissionHud();
   updateExposureHud();
+  updateNoiseHud('normal', false);
+  accessText.textContent = '없음';
+  mapText.textContent = '0%';
+  cameraWarning.classList.add('hidden'); cameraWarning.classList.remove('alert');
+  securityWarning.classList.add('hidden');
 }
 
 function startGame() {
@@ -338,6 +545,7 @@ function startGame() {
 
 function finishGame(won: boolean) {
   state = won ? 'won' : 'caught';
+  if (!won && lastCctvAlertAt >= 0) caughtAfterCctv = elapsed - lastCctvAlertAt;
   finalScore = calculateFinalScore(won);
   logPlaytestEvent(won ? 'result:escaped' : 'result:caught');
   resultEyebrow.textContent = won ? 'MISSION REPORT // CLEAN EXIT' : 'MISSION REPORT // COMPROMISED';
@@ -356,7 +564,7 @@ function finishGame(won: boolean) {
 
 function savePlaytestRun(won: boolean) {
   const run = {
-    version: 'prototype-02',
+    version: 'prototype-13',
     finishedAt: new Date().toISOString(),
     result: won ? 'escaped' : 'caught',
     duration: Number(elapsed.toFixed(2)),
@@ -379,6 +587,34 @@ function savePlaytestRun(won: boolean) {
     hideChecks,
     hiddenCaptures,
     noiseInvestigations,
+    playerFootsteps,
+    heardFootsteps,
+    footstepInvestigations,
+    carefulWalkTime: Number(carefulWalkTime.toFixed(2)),
+    normalWalkTime: Number(normalWalkTime.toFixed(2)),
+    crouchTime: Number(crouchTime.toFixed(2)),
+    hasKeycard: keycard.collected,
+    doorsOpened,
+    doorsClosed,
+    lockedAttempts,
+    doorNoiseInvestigations,
+    radioMessages,
+    sharedInvestigations,
+    lockdownsTriggered,
+    lockdownExtensions,
+    blockedExitAttempts,
+    lockdownSurvivalTime: Number(lockdownSurvivalTime.toFixed(2)),
+    maxLockdownDuration: Number(maxLockdownDuration.toFixed(2)),
+    lockdownRemaining: Number(exitLockdown.toFixed(2)),
+    caughtDuringLockdown: !won && exitLockdown > 0,
+    exploredPercent: maxExploredPercent,
+    cctvSightEntries,
+    cctvAlerts,
+    cctvPanelsUsed,
+    disabledPasses,
+    cctvBlindTime: Number(cctvBlindTime.toFixed(2)),
+    maxCctvDetection: Number(maxCctvDetection.toFixed(2)),
+    caughtAfterCctv: caughtAfterCctv < 0 ? null : Number(caughtAfterCctv.toFixed(2)),
     treasures: treasures.filter(item => item.collected).map(item => item.id),
     events: playtestEvents,
   };
@@ -397,12 +633,14 @@ function setStatus(text: string, danger: boolean, warning = false) {
   statusBadge.classList.toggle('warning', warning);
 }
 
+function circleIntersectsRect(point: Point, r: number, rect: Rect) {
+  const nx = Math.max(rect.x, Math.min(point.x, rect.x + rect.w));
+  const ny = Math.max(rect.y, Math.min(point.y, rect.y + rect.h));
+  return (point.x - nx) ** 2 + (point.y - ny) ** 2 < r ** 2;
+}
+
 function collidesCircle(x: number, y: number, r: number) {
-  return walls.some(w => {
-    const nx = Math.max(w.x, Math.min(x, w.x + w.w));
-    const ny = Math.max(w.y, Math.min(y, w.y + w.h));
-    return (x - nx) ** 2 + (y - ny) ** 2 < r ** 2;
-  });
+  return visionBlockers().some(rect => circleIntersectsRect({ x, y }, r, rect));
 }
 
 function moveEntity(entity: { x: number; y: number }, dx: number, dy: number, r: number) {
@@ -410,23 +648,8 @@ function moveEntity(entity: { x: number; y: number }, dx: number, dy: number, r:
   if (!collidesCircle(entity.x, entity.y + dy, r)) entity.y += dy;
 }
 
-function segmentIntersectsRect(a: Point, b: Point, r: Rect) {
-  const edges: [Point, Point][] = [
-    [{ x: r.x, y: r.y }, { x: r.x + r.w, y: r.y }],
-    [{ x: r.x + r.w, y: r.y }, { x: r.x + r.w, y: r.y + r.h }],
-    [{ x: r.x + r.w, y: r.y + r.h }, { x: r.x, y: r.y + r.h }],
-    [{ x: r.x, y: r.y + r.h }, { x: r.x, y: r.y }],
-  ];
-  return edges.some(([c, d]) => {
-    const den = (a.x - b.x) * (c.y - d.y) - (a.y - b.y) * (c.x - d.x);
-    if (Math.abs(den) < .001) return false;
-    const t = ((a.x - c.x) * (c.y - d.y) - (a.y - c.y) * (c.x - d.x)) / den;
-    const u = -((a.x - b.x) * (a.y - c.y) - (a.y - b.y) * (a.x - c.x)) / den;
-    return t > .001 && t < .999 && u >= 0 && u <= 1;
-  });
-}
-
-function hasLineOfSight(a: Point, b: Point) { return !walls.some(w => segmentIntersectsRect(a, b, w)); }
+function visionBlockers(): Rect[] { return [...walls, ...doors.filter(door => !door.open)]; }
+function hasLineOfSight(a: Point, b: Point) { return hasVisionLine(a, b, visionBlockers()); }
 function distance(a: Point, b: Point) { return Math.hypot(a.x - b.x, a.y - b.y); }
 function angleDelta(a: number, b: number) { return Math.atan2(Math.sin(a - b), Math.cos(a - b)); }
 
@@ -457,22 +680,131 @@ function lightLevelAt(point: Point) {
 
 function currentPlayerVision() {
   if (activeHidingSpot) return 125;
-  return MIN_PLAYER_VISION + playerExposure * 112;
+  return MIN_PLAYER_VISION + playerExposure * 112 - (keys.has('c') ? 24 : 0);
 }
 
-function guardCanSeePoint(point: Point, exposure = playerExposure) {
-  const chaseVision = guard.state === 'CHASE';
-  const range = ((chaseVision ? 465 : 390) + alertLevel * 18) * (.68 + exposure * .55);
-  const angle = chaseVision ? .82 : .56;
-  const direction = Math.atan2(point.y - guard.y, point.x - guard.x);
-  return distance(guard, point) < range && Math.abs(angleDelta(direction, guard.facing)) < angle && hasLineOfSight(guard, point);
+function updateExploration(dt: number) {
+  explorationTimer -= dt;
+  if (explorationTimer > 0) return;
+  explorationTimer = .18;
+  const radius = currentPlayerVision() * .94;
+  explorableCells.forEach(cell => {
+    if (exploredCells.has(cell.id) || distance(player, cell) > radius) return;
+    if (hasLineOfSight(player, cell)) exploredCells.add(cell.id);
+  });
+  const percent = exploredPercent(exploredCells.size, explorableCells.length);
+  maxExploredPercent = Math.max(maxExploredPercent, percent);
+  mapText.textContent = `${percent}%`;
 }
+
+function playerConcealmentMultiplier() { return keys.has('c') && !activeHidingSpot ? .7 : 1; }
+
+function actorCanSeePoint(actor: GuardActor, point: Point, exposure = playerExposure) {
+  const chaseVision = actor.state === 'CHASE';
+  const range = ((chaseVision ? 465 : 390) + alertLevel * 18) * (.68 + exposure * .55) * playerConcealmentMultiplier();
+  const angle = chaseVision ? .82 : .56;
+  const direction = Math.atan2(point.y - actor.y, point.x - actor.x);
+  return distance(actor, point) < range && Math.abs(angleDelta(direction, actor.facing)) < angle && hasLineOfSight(actor, point);
+}
+
+function guardCanSeePoint(point: Point, exposure = playerExposure) { return actorCanSeePoint(guard, point, exposure); }
 
 function beginHideCheck(spot: HidingSpot) {
   guard.suspectedHideId = spot.id;
   guard.lastSeen = { x: spot.x, y: spot.y };
   hideChecks++;
   setGuardState('HIDE_CHECK');
+}
+
+function cameraCanSeePlayer(camera: CctvCamera, ignoreState = false) {
+  if (activeHidingSpot) return false;
+  if (!ignoreState && (camera.state === 'DISABLED' || camera.state === 'COOLDOWN')) return false;
+  const range = (camera.range + alertLevel * 18) * (.72 + playerExposure * .42) * playerConcealmentMultiplier();
+  const direction = Math.atan2(player.y - camera.y, player.x - camera.x);
+  return distance(camera, player) < range && Math.abs(angleDelta(direction, camera.facing)) < .43 && hasLineOfSight(camera, player);
+}
+
+function triggerCctvAlert(camera: CctvCamera) {
+  camera.state = 'ALERT'; camera.stateTime = 0; camera.detection = 1;
+  cctvAlerts++; lastCctvAlertAt = elapsed; stateFlash = Math.max(stateFlash, .72); shake = Math.max(shake, 7);
+  alertLevel = Math.min(3, Math.max(alertLevel + 1, collectedTreasureCount()));
+  updateMissionHud(); audio.cameraAlert(); logPlaytestEvent(`cctv:alert:${camera.id}`);
+  guard.lastSeen = { x: player.x, y: player.y };
+  if (guard.state === 'CHASE') guard.repathTimer = 0;
+  else { detection = Math.max(detection, .48); setGuardState('INVESTIGATE'); }
+  shareGuardReport(null, player);
+  if (treasureTaken) triggerExitLockdown('cctv');
+}
+
+function updateCctvs(dt: number, now: number) {
+  let highestDetection = 0;
+  let insideCameraRange = false;
+  let nearestActiveDistance = Infinity;
+
+  cctvCameras.forEach(camera => {
+    camera.stateTime += dt;
+    const playerDistance = distance(camera, player);
+
+    if (camera.state === 'DISABLED') {
+      camera.disabledTime -= dt;
+      if (cameraCanSeePlayer(camera, true) && !camera.disabledPassRecorded) {
+        camera.disabledPassRecorded = true; disabledPasses++; logPlaytestEvent(`cctv:disabled-pass:${camera.id}`);
+      }
+      if (camera.disabledTime <= 0) {
+        camera.state = 'SCAN'; camera.stateTime = 0; camera.detection = 0;
+        logPlaytestEvent(`cctv:restored:${camera.id}`);
+      }
+      camerasSeeingPlayer.delete(camera.id);
+      return;
+    }
+
+    if (camera.state === 'ALERT') {
+      highestDetection = 1;
+      if (camera.stateTime > .7) {
+        camera.state = 'COOLDOWN'; camera.stateTime = 0; camera.detection = 0;
+        if (alertLevel >= 3) camera.direction = camera.direction === 1 ? -1 : 1;
+      }
+      return;
+    }
+
+    if (camera.state === 'COOLDOWN') {
+      if (camera.stateTime > Math.max(2.7, 5 - alertLevel * .6)) {
+        camera.state = 'SCAN'; camera.stateTime = 0;
+      }
+      camerasSeeingPlayer.delete(camera.id);
+      return;
+    }
+
+    const sweep = camera.sweepSpeed * (1 + alertLevel * .16);
+    camera.facing += camera.direction * sweep * dt;
+    if (camera.facing >= camera.maxAngle) { camera.facing = camera.maxAngle; camera.direction = -1; }
+    if (camera.facing <= camera.minAngle) { camera.facing = camera.minAngle; camera.direction = 1; }
+
+    nearestActiveDistance = Math.min(nearestActiveDistance, playerDistance);
+    if (playerDistance < camera.range + alertLevel * 18 && hasLineOfSight(camera, player)) insideCameraRange = true;
+    const sees = cameraCanSeePlayer(camera);
+    if (sees) {
+      if (!camerasSeeingPlayer.has(camera.id)) { cctvSightEntries++; logPlaytestEvent(`cctv:entered:${camera.id}`); }
+      camerasSeeingPlayer.add(camera.id);
+      camera.state = 'DETECTING';
+      const rate = (.58 + playerExposure * .72 + alertLevel * .11) * playerConcealmentMultiplier();
+      camera.detection = Math.min(1, camera.detection + dt * rate);
+      if (camera.detection >= 1) triggerCctvAlert(camera);
+    } else {
+      camerasSeeingPlayer.delete(camera.id);
+      camera.detection = Math.max(0, camera.detection - dt * 1.45);
+      if (camera.detection === 0) camera.state = 'SCAN';
+    }
+    highestDetection = Math.max(highestDetection, camera.detection);
+  });
+
+  maxCctvDetection = Math.max(maxCctvDetection, highestDetection);
+  if (!activeHidingSpot && insideCameraRange && camerasSeeingPlayer.size === 0) cctvBlindTime += dt;
+  const motorProximity = nearestActiveDistance < 520 ? Math.max(0, 1 - nearestActiveDistance / 520) : 0;
+  audio.cameraMotor(now, motorProximity);
+  cameraWarning.classList.toggle('hidden', highestDetection <= .02);
+  cameraWarning.classList.toggle('alert', highestDetection >= 1);
+  cameraDetection.textContent = `${Math.round(highestDetection * 100)}%`;
 }
 
 const NAV_SIZE = 40;
@@ -556,26 +888,46 @@ function clearPathForGuard(a: Point, b: Point) {
   return true;
 }
 
-function moveGuardTo(target: Point, speed: number, dt: number) {
-  guard.repathTimer -= dt;
-  const targetMoved = distance(guard.pathTarget, target) > 55;
-  if (guard.repathTimer <= 0 || targetMoved || guard.pathIndex >= guard.path.length) {
-    guard.path = clearPathForGuard(guard, target) ? [{ x: target.x, y: target.y }] : findPath(guard, target);
-    guard.pathIndex = 0;
-    guard.pathTarget = { x: target.x, y: target.y };
-    guard.repathTimer = guard.state === 'CHASE' ? .28 : .7;
+function moveGuardTo(actor: GuardActor, target: Point, speed: number, dt: number) {
+  actor.repathTimer -= dt;
+  const targetMoved = distance(actor.pathTarget, target) > 55;
+  if (actor.repathTimer <= 0 || targetMoved || actor.pathIndex >= actor.path.length) {
+    actor.path = clearPathForGuard(actor, target) ? [{ x: target.x, y: target.y }] : findPath(actor, target);
+    actor.pathIndex = 0;
+    actor.pathTarget = { x: target.x, y: target.y };
+    actor.repathTimer = actor.state === 'CHASE' ? .28 : .7;
   }
-  while (guard.pathIndex < guard.path.length && distance(guard, guard.path[guard.pathIndex]) < 15) guard.pathIndex++;
-  const waypoint = guard.path[guard.pathIndex];
-  if (!waypoint) return distance(guard, target) < 28;
-  const desired = Math.atan2(waypoint.y - guard.y, waypoint.x - guard.x);
-  guard.facing += angleDelta(desired, guard.facing) * Math.min(1, dt * 9);
-  moveEntity(guard, Math.cos(desired) * speed * dt, Math.sin(desired) * speed * dt, GUARD_RADIUS);
-  return distance(guard, target) < 28;
+  while (actor.pathIndex < actor.path.length && distance(actor, actor.path[actor.pathIndex]) < 15) actor.pathIndex++;
+  const waypoint = actor.path[actor.pathIndex];
+  if (!waypoint) return distance(actor, target) < 28;
+  const desired = Math.atan2(waypoint.y - actor.y, waypoint.x - actor.x);
+  actor.facing += angleDelta(desired, actor.facing) * Math.min(1, dt * 9);
+  moveEntity(actor, Math.cos(desired) * speed * dt, Math.sin(desired) * speed * dt, GUARD_RADIUS);
+  return distance(actor, target) < 28;
 }
 
 function logPlaytestEvent(type: string) {
   playtestEvents.push({ time: Number(elapsed.toFixed(2)), type, x: Math.round(player.x), y: Math.round(player.y) });
+}
+
+function emitPlayerFootstep(mode: MovementMode) {
+  const profile = movementNoiseProfile(mode, collectedTreasureCount());
+  playerStepTimer = profile.interval;
+  playerFootsteps++;
+  noisePulses.push({ x: player.x, y: player.y, radius: profile.radius, age: 0, duration: .62, mode });
+  audio.playerStep(mode);
+
+  [guard, supportGuard].forEach(actor => {
+    const hearingRadius = effectiveHearingRadius(profile.radius, !hasLineOfSight(actor, player), alertLevel);
+    if (distance(actor, player) > hearingRadius || actor.state === 'CHASE' || actor.state === 'HIDE_CHECK') return;
+    heardFootsteps++;
+    if (actor.state !== 'INVESTIGATE') footstepInvestigations++;
+    actor.lastSeen = { x: player.x, y: player.y };
+    const detectionFloor = mode === 'crouch' ? .1 : mode === 'careful' ? .18 : .3;
+    if (actor.id === guard.id) { detection = Math.max(detection, detectionFloor); setGuardState('INVESTIGATE'); }
+    else { supportDetection = Math.max(supportDetection, detectionFloor * .94); setSupportGuardState('INVESTIGATE'); }
+    logPlaytestEvent(`noise:footstep:${actor.id}:${mode}`);
+  });
 }
 
 function setGuardState(next: GuardState) {
@@ -586,6 +938,29 @@ function setGuardState(next: GuardState) {
   if (next === 'SEARCH') { guard.searchOrigin = { ...guard.lastSeen }; guard.searchStep = 0; }
   audio.cue(next);
   logPlaytestEvent(`guard:${next.toLowerCase()}`);
+  if (next === 'CHASE') shareGuardReport(guard, guard.lastSeen);
+}
+
+function setSupportGuardState(next: GuardState) {
+  if (supportGuard.state === next) return;
+  supportGuard.state = next; supportGuard.stateTime = 0; supportGuard.repathTimer = 0; supportGuard.path = []; supportGuard.pathIndex = 0;
+  if (next === 'CHASE') { spottedCount++; shake = Math.max(shake, 10); stateFlash = 1; }
+  if (next === 'SEARCH') { supportGuard.searchOrigin = { ...supportGuard.lastSeen }; supportGuard.searchStep = 0; }
+  audio.cue(next);
+  logPlaytestEvent(`guard:bravo:${next.toLowerCase()}`);
+  if (next === 'CHASE') shareGuardReport(supportGuard, supportGuard.lastSeen);
+}
+
+function shareGuardReport(source: GuardActor | null, point: Point) {
+  if (radioCooldown > 0) return;
+  radioCooldown = 1.2; radioMessages++; audio.radio();
+  if (source?.id !== guard.id && guard.state !== 'CHASE' && guard.state !== 'HIDE_CHECK') {
+    guard.lastSeen = { ...point }; detection = Math.max(detection, .38); sharedInvestigations++; setGuardState('INVESTIGATE');
+  }
+  if (source?.id !== supportGuard.id && supportGuard.state !== 'CHASE') {
+    supportGuard.lastSeen = { ...point }; supportDetection = Math.max(supportDetection, .38); sharedInvestigations++; setSupportGuardState('INVESTIGATE');
+  }
+  logPlaytestEvent(`radio:${source?.id ?? 'security'}`);
 }
 
 function searchPoint() {
@@ -596,22 +971,98 @@ function searchPoint() {
   return guard.searchOrigin;
 }
 
+function supportSearchPoint() {
+  const ring = 70 + Math.floor(supportGuard.searchStep / 4) * 52;
+  const angle = supportGuard.searchStep * Math.PI / 2 - Math.PI / 4;
+  const candidate = { x: supportGuard.searchOrigin.x + Math.cos(angle) * ring, y: supportGuard.searchOrigin.y + Math.sin(angle) * ring };
+  if (!collidesCircle(candidate.x, candidate.y, GUARD_RADIUS + 5)) return candidate;
+  return supportGuard.searchOrigin;
+}
+
+function updateSupportGuard(dt: number) {
+  const sees = !activeHidingSpot && actorCanSeePoint(supportGuard, player);
+  supportGuard.stateTime += dt;
+  if (sees) {
+    supportGuard.lastSeen = { x: player.x, y: player.y }; supportGuard.lostSightTime = 0;
+    const exposureRate = (.52 + playerExposure * .7) * playerConcealmentMultiplier();
+    supportDetection = Math.min(1, supportDetection + dt * ((supportGuard.state === 'SUSPICIOUS' ? 1.9 : 2.45) + alertLevel * .13) * exposureRate);
+  } else {
+    supportGuard.lostSightTime += dt;
+    if (supportGuard.state !== 'CHASE') supportDetection = Math.max(0, supportDetection - dt * 1.08);
+  }
+
+  switch (supportGuard.state) {
+    case 'PATROL':
+      if (sees || supportDetection > .12) setSupportGuardState('SUSPICIOUS');
+      else if (moveGuardTo(supportGuard, supportPatrol[supportGuard.target], 78 + alertLevel * 7, dt)) {
+        supportGuard.target = (supportGuard.target + 1) % supportPatrol.length; supportGuard.repathTimer = 0;
+      }
+      break;
+    case 'SUSPICIOUS': {
+      const lookAt = Math.atan2(supportGuard.lastSeen.y - supportGuard.y, supportGuard.lastSeen.x - supportGuard.x);
+      supportGuard.facing += angleDelta(lookAt, supportGuard.facing) * Math.min(1, dt * 7);
+      if (supportDetection >= 1) setSupportGuardState('CHASE');
+      else if (!sees && supportGuard.stateTime > .8) {
+        if (supportDetection < .25) { closeCalls++; supportDetection = 0; setSupportGuardState('PATROL'); }
+        else setSupportGuardState('INVESTIGATE');
+      }
+      break;
+    }
+    case 'INVESTIGATE':
+      if (supportDetection >= 1) setSupportGuardState('CHASE');
+      else if (moveGuardTo(supportGuard, supportGuard.lastSeen, 104 + alertLevel * 7, dt)) setSupportGuardState('SEARCH');
+      break;
+    case 'CHASE':
+      if (guard.state !== 'CHASE') chaseTime += dt;
+      if (sees) supportGuard.lastSeen = { x: player.x, y: player.y };
+      moveGuardTo(supportGuard, supportGuard.lastSeen, 170 + alertLevel * 7, dt);
+      if (!sees && supportGuard.lostSightTime > 1.9) { supportDetection = .5; setSupportGuardState('INVESTIGATE'); }
+      break;
+    case 'SEARCH': {
+      const target = supportSearchPoint();
+      if (sees && supportDetection > .6) setSupportGuardState('CHASE');
+      else if (sees) setSupportGuardState('SUSPICIOUS');
+      else if (moveGuardTo(supportGuard, target, 91 + alertLevel * 6, dt)) { supportGuard.searchStep++; supportGuard.repathTimer = 0; }
+      if (supportGuard.stateTime > 7 + alertLevel * 1.4 || supportGuard.searchStep > 8 + alertLevel * 2) { supportDetection = 0; setSupportGuardState('PATROL'); }
+      break;
+    }
+    case 'HIDE_CHECK': setSupportGuardState('SEARCH'); break;
+  }
+
+  maxDetection = Math.max(maxDetection, supportDetection);
+  if (supportGuard.state === 'CHASE') setStatus('발각 — 협동 추격 중', true);
+  else if (guard.state === 'PATROL' && supportGuard.state !== 'PATROL') setStatus('경비 브라보 조사 중', false, true);
+}
+
 function update(dt: number, now: number) {
   if (state !== 'playing') return;
   elapsed += dt;
+  radioCooldown = Math.max(0, radioCooldown - dt);
+  updateExitLockdown(dt, now);
   stateFlash = Math.max(0, stateFlash - dt * 2.2);
-  if (treasureTaken) treasureBeat += dt;
+  if (alertLevel > 0) treasureBeat += dt;
   const xInput = activeHidingSpot ? 0 : (keys.has('d') || keys.has('arrowright') ? 1 : 0) - (keys.has('a') || keys.has('arrowleft') ? 1 : 0);
   const yInput = activeHidingSpot ? 0 : (keys.has('s') || keys.has('arrowdown') ? 1 : 0) - (keys.has('w') || keys.has('arrowup') ? 1 : 0);
   const len = Math.hypot(xInput, yInput) || 1;
   const careful = keys.has('shift');
-  const speed = careful ? 118 : 205;
+  const crouching = keys.has('c');
+  const movementMode: MovementMode = crouching ? 'crouch' : careful ? 'careful' : 'normal';
+  const speed = crouching ? 88 : careful ? 118 : 205;
   const tx = xInput / len * speed; const ty = yInput / len * speed;
   player.vx += (tx - player.vx) * Math.min(1, dt * 12);
   player.vy += (ty - player.vy) * Math.min(1, dt * 12);
   if (!xInput && !yInput) { player.vx *= Math.max(0, 1 - dt * 12); player.vy *= Math.max(0, 1 - dt * 12); }
   if (Math.hypot(player.vx, player.vy) > 5) player.facing = Math.atan2(player.vy, player.vx);
   moveEntity(player, player.vx * dt, player.vy * dt, PLAYER_RADIUS);
+  const playerMoving = !activeHidingSpot && Math.hypot(player.vx, player.vy) > 35;
+  playerStepTimer -= dt;
+  if (playerMoving) {
+    if (crouching) crouchTime += dt; else if (careful) carefulWalkTime += dt; else normalWalkTime += dt;
+    if (playerStepTimer <= 0) emitPlayerFootstep(movementMode);
+  } else playerStepTimer = Math.min(playerStepTimer, .08);
+  noisePulses.forEach(pulse => { pulse.age += dt; });
+  for (let i = noisePulses.length - 1; i >= 0; i--) if (noisePulses[i].age >= noisePulses[i].duration) noisePulses.splice(i, 1);
+  updateNoiseHud(movementMode, playerMoving);
   if (activeHidingSpot) hidingTime += dt;
   const exposureTarget = lightLevelAt(player);
   playerExposure += (exposureTarget - playerExposure) * Math.min(1, dt * 6);
@@ -619,6 +1070,8 @@ function update(dt: number, now: number) {
   if (playerExposure >= .6) brightTime += dt;
   if (playerExposure < .28) darkTime += dt;
   updateExposureHud();
+  updateExploration(dt);
+  updateCctvs(dt, now);
 
   const guardDistance = distance(player, guard);
   const sees = !activeHidingSpot && guardCanSeePoint(player);
@@ -627,7 +1080,7 @@ function update(dt: number, now: number) {
   if (sees) {
     guard.lastSeen = { x: player.x, y: player.y };
     guard.lostSightTime = 0;
-    const exposureRate = .56 + playerExposure * .74;
+    const exposureRate = (.56 + playerExposure * .74) * playerConcealmentMultiplier();
     detection = Math.min(1, detection + dt * ((guard.state === 'SUSPICIOUS' ? 2.1 : 2.7) + alertLevel * .14) * exposureRate);
   } else {
     guard.lostSightTime += dt;
@@ -639,7 +1092,7 @@ function update(dt: number, now: number) {
     case 'PATROL': {
       if (sees || detection > .12) {
         setGuardState('SUSPICIOUS');
-      } else if (moveGuardTo(patrol[guard.target], 82 + alertLevel * 7, dt)) {
+      } else if (moveGuardTo(guard, patrol[guard.target], 82 + alertLevel * 7, dt)) {
         const direction = alertLevel >= 2 ? -1 : 1;
         guard.target = (guard.target + direction + patrol.length) % patrol.length;
         guard.repathTimer = 0;
@@ -662,7 +1115,7 @@ function update(dt: number, now: number) {
     case 'INVESTIGATE': {
       setStatus('마지막 움직임 조사 중', false, true);
       if (detection >= 1) setGuardState('CHASE');
-      else if (moveGuardTo(guard.lastSeen, 108 + alertLevel * 7, dt)) {
+      else if (moveGuardTo(guard, guard.lastSeen, 108 + alertLevel * 7, dt)) {
         const nearbySpot = activeHidingSpot && distance(activeHidingSpot, guard.lastSeen) < 115 ? activeHidingSpot : null;
         const checkChance = alertLevel >= 2 ? .2 + alertLevel * .2 : 0;
         if (nearbySpot && Math.random() < checkChance) beginHideCheck(nearbySpot);
@@ -674,7 +1127,7 @@ function update(dt: number, now: number) {
       chaseTime += dt;
       setStatus('발각 — 추격 중', true);
       if (sees) guard.lastSeen = { x: player.x, y: player.y };
-      moveGuardTo(guard.lastSeen, 176 + alertLevel * 7, dt);
+      moveGuardTo(guard, guard.lastSeen, 176 + alertLevel * 7, dt);
       if (!sees && guard.lostSightTime > 1.8) {
         detection = .55;
         setGuardState('INVESTIGATE');
@@ -686,7 +1139,7 @@ function update(dt: number, now: number) {
       const target = searchPoint();
       if (sees && detection > .62) setGuardState('CHASE');
       else if (sees) setGuardState('SUSPICIOUS');
-      else if (moveGuardTo(target, 94 + alertLevel * 6, dt)) { guard.searchStep++; guard.repathTimer = 0; }
+      else if (moveGuardTo(guard, target, 94 + alertLevel * 6, dt)) { guard.searchStep++; guard.repathTimer = 0; }
       if (guard.stateTime > 7.5 + alertLevel * 1.5 || guard.searchStep > 8 + alertLevel * 2) {
         detection = 0; setGuardState('PATROL');
       }
@@ -700,7 +1153,7 @@ function update(dt: number, now: number) {
         setGuardState('CHASE');
       } else if (!spot) {
         setGuardState('SEARCH');
-      } else if (moveGuardTo(spot, 132 + alertLevel * 7, dt)) {
+      } else if (moveGuardTo(guard, spot, 132 + alertLevel * 7, dt)) {
         audio.hideInspect();
         if (activeHidingSpot?.id === spot.id) {
           hiddenCaptures++;
@@ -715,29 +1168,42 @@ function update(dt: number, now: number) {
       break;
     }
   }
+  updateSupportGuard(dt);
   if (!activeHidingSpot && guard.state === 'CHASE' && guardDistance < PLAYER_RADIUS + GUARD_RADIUS + 5) finishGame(false);
+  if (!activeHidingSpot && supportGuard.state === 'CHASE' && distance(player, supportGuard) < PLAYER_RADIUS + GUARD_RADIUS + 5) finishGame(false);
 
-  const proximity = Math.max(0, 1 - guardDistance / 720);
+  const nearestGuard = guardDistance <= distance(player, supportGuard) ? guard : supportGuard;
+  const nearestGuardDistance = distance(player, nearestGuard);
+  const proximity = Math.max(0, 1 - nearestGuardDistance / 720);
   const barCount = Math.ceil(proximity * 5);
   soundBars.forEach((bar, i) => bar.classList.toggle('active', i < barCount));
-  const screenDx = guard.x - player.x;
+  const screenDx = nearestGuard.x - player.x;
   soundDirection.textContent = proximity < .08 ? '·' : Math.abs(screenDx) < 60 ? '◆' : screenDx < 0 ? '←' : '→';
-  audio.update(now, guardDistance, screenDx / 350, guard.state === 'CHASE', !hasLineOfSight(player, guard));
+  audio.update(now, nearestGuardDistance, screenDx / 350, nearestGuard.state === 'CHASE', !hasLineOfSight(player, nearestGuard));
   audio.updateAlarm(now);
   audio.updateLightHum(now, playerExposure);
 
   const nearbyTreasure = treasures.find(item => !item.collected && distance(player, item) < 52);
+  const nearbyKeycard = !keycard.collected && distance(player, keycard) < 48 ? keycard : null;
   const nearbyHide = activeHidingSpot ?? hidingSpots.find(item => distance(player, item) < 52);
+  const nearbyCctvPanel = cctvPanels.find(item => !item.used && distance(player, item) < 48);
   const nearbySwitch = lightSwitches.find(item => !item.used && distance(player, item) < 48);
+  const nearbyDoor = doors.find(item => distance(player, doorCenter(item)) < 62);
   const nearExit = treasureTaken && distance(player, exit) < 65;
-  prompt.classList.toggle('hidden', !nearbyTreasure && !nearbyHide && !nearbySwitch && !nearExit);
+  prompt.classList.toggle('hidden', !nearbyTreasure && !nearbyKeycard && !nearbyHide && !nearbyCctvPanel && !nearbySwitch && !nearbyDoor && !nearExit);
   const switchOn = nearbySwitch ? lightSources.some(light => light.group === nearbySwitch.group && light.on) : false;
   prompt.innerHTML = activeHidingSpot ? `<b>E</b> ${activeHidingSpot.name}에서 나오기`
     : nearbyTreasure
     ? `<b>E</b> ${nearbyTreasure.name} 훔치기 · ${nearbyTreasure.value.toLocaleString('ko-KR')}`
+    : nearbyKeycard ? `<b>E</b> ${nearbyKeycard.name} 획득`
     : nearbyHide ? `<b>E</b> ${nearbyHide.name}에 숨기`
+    : nearbyCctvPanel ? `<b>E</b> ${nearbyCctvPanel.name} 비활성화 · 1회용`
     : nearbySwitch ? `<b>E</b> 구역 조명 ${switchOn ? '끄기' : '켜기'} · 1회용`
-    : nearExit ? `<b>E</b> 지금 탈출 · ${currentTake().toLocaleString('ko-KR')}점 확보` : '';
+    : nearbyDoor ? `<b>E</b> ${nearbyDoor.name} ${nearbyDoor.open ? '닫기' : nearbyDoor.locked && !keycard.collected ? '열기 · 키카드 필요' : '열기'}`
+    : nearExit ? exitLockdown > 0
+      ? `<b>E</b> 출구 봉쇄 중 · ${exitLockdown.toFixed(1)}초`
+      : `<b>E</b> 지금 탈출 · ${currentTake().toLocaleString('ko-KR')}점 확보`
+    : '';
 
   const camTargetX = Math.max(0, Math.min(WORLD.w - VIEW.w, player.x - VIEW.w / 2));
   const camTargetY = Math.max(0, Math.min(WORLD.h - VIEW.h, player.y - VIEW.h / 2));
@@ -747,11 +1213,14 @@ function update(dt: number, now: number) {
 }
 
 function enterHiding(spot: HidingSpot) {
-  const witnessed = guardCanSeePoint(player) || (guard.state === 'CHASE' && hasLineOfSight(guard, player));
+  const primaryWitness = guardCanSeePoint(player) || (guard.state === 'CHASE' && hasLineOfSight(guard, player));
+  const supportWitness = actorCanSeePoint(supportGuard, player) || (supportGuard.state === 'CHASE' && hasLineOfSight(supportGuard, player));
+  const witnessed = primaryWitness || supportWitness;
   activeHidingSpot = spot;
   player.x = spot.x; player.y = spot.y; player.vx = 0; player.vy = 0;
   hideEntries++; audio.hideMovement(true); logPlaytestEvent(`hide:enter:${spot.id}`);
   if (witnessed) {
+    if (supportWitness) shareGuardReport(supportGuard, spot);
     beginHideCheck(spot);
   } else {
     const soundRange = hasLineOfSight(guard, spot) ? 235 : 145;
@@ -787,6 +1256,47 @@ function exitHiding() {
   }
 }
 
+function doorCenter(door: Door): Point {
+  return { x: door.x + door.w / 2, y: door.y + door.h / 2 };
+}
+
+function alertGuardToDoorNoise(door: Door, radius: number) {
+  const point = doorCenter(door);
+  let reporter: GuardActor | null = null;
+  [guard, supportGuard].forEach(actor => {
+    if (actor.state === 'CHASE' || actor.state === 'HIDE_CHECK') return;
+    const hearingRadius = effectiveHearingRadius(radius, !hasLineOfSight(actor, point), alertLevel);
+    if (distance(actor, point) > hearingRadius) return;
+    doorNoiseInvestigations++; reporter ??= actor; actor.lastSeen = point;
+    if (actor.id === guard.id) { detection = Math.max(detection, .32); setGuardState('INVESTIGATE'); }
+    else { supportDetection = Math.max(supportDetection, .3); setSupportGuardState('INVESTIGATE'); }
+    logPlaytestEvent(`door:heard:${actor.id}:${door.id}`);
+  });
+  if (reporter && radius >= 300) shareGuardReport(reporter, point);
+}
+
+function useDoor(door: Door) {
+  if (!door.open && door.locked && !keycard.collected) {
+    lockedAttempts++; audio.door('locked'); stateFlash = Math.max(stateFlash, .18);
+    logPlaytestEvent(`door:locked:${door.id}`);
+    return;
+  }
+
+  if (door.open && (circleIntersectsRect(player, PLAYER_RADIUS + 4, door) || circleIntersectsRect(guard, GUARD_RADIUS + 4, door) || circleIntersectsRect(supportGuard, GUARD_RADIUS + 4, door))) {
+    audio.door('locked');
+    logPlaytestEvent(`door:blocked:${door.id}`);
+    return;
+  }
+
+  door.open = !door.open;
+  if (door.open) doorsOpened++; else doorsClosed++;
+  lightPolygonCache.clear();
+  guard.repathTimer = 0; supportGuard.repathTimer = 0;
+  audio.door(door.open ? 'open' : 'close');
+  alertGuardToDoorNoise(door, door.open ? 255 : 315);
+  logPlaytestEvent(`door:${door.open ? 'open' : 'close'}:${door.id}`);
+}
+
 function interact() {
   if (state !== 'playing') return;
   if (activeHidingSpot) { exitHiding(); return; }
@@ -795,8 +1305,9 @@ function interact() {
     nearbyTreasure.collected = true;
     treasureTaken = true;
     lootScore += nearbyTreasure.value;
-    alertLevel = collectedTreasureCount();
-    const allCollected = alertLevel === treasures.length;
+    const collectedCount = collectedTreasureCount();
+    alertLevel = Math.max(alertLevel, collectedCount);
+    const allCollected = collectedCount === treasures.length;
     objectiveText.textContent = allCollected ? '모든 보물 확보 — 출구로 탈출하세요' : '탈출하거나, 더 깊이 들어가세요';
     updateMissionHud(); shake = 7 + alertLevel * 2; stateFlash = Math.max(stateFlash, .42);
     logPlaytestEvent(`treasure:${nearbyTreasure.id}`);
@@ -806,10 +1317,35 @@ function interact() {
       guard.target = alertLevel === 3 ? 10 : (guard.target + 3) % patrol.length;
       setGuardState('INVESTIGATE');
     }
+    shareGuardReport(null, nearbyTreasure);
+    if (allCollected) triggerExitLockdown('final-loot');
     if (audio.context && audio.master) audio.sting(true);
   } else {
+    if (!keycard.collected && distance(player, keycard) < 48) {
+      keycard.collected = true; accessText.textContent = '키카드'; audio.door('keycard'); shake = 2;
+      logPlaytestEvent(`access:${keycard.id}`);
+      return;
+    }
     const nearbyHide = hidingSpots.find(item => distance(player, item) < 52);
     if (nearbyHide) { enterHiding(nearbyHide); return; }
+    const nearbyCctvPanel = cctvPanels.find(item => !item.used && distance(player, item) < 48);
+    if (nearbyCctvPanel) {
+      const camera = cctvCameras.find(item => item.id === nearbyCctvPanel.cameraId);
+      if (camera) {
+        nearbyCctvPanel.used = true; cctvPanelsUsed++;
+        camera.state = 'DISABLED'; camera.stateTime = 0; camera.detection = 0;
+        camera.disabledTime = Math.max(7.5, 11 - alertLevel * .7); camera.disabledPassRecorded = false;
+        camerasSeeingPlayer.delete(camera.id); audio.cameraPanel(); shake = 3;
+        logPlaytestEvent(`cctv:disabled:${camera.id}`);
+        const soundRange = hasLineOfSight(guard, nearbyCctvPanel) ? 245 : 145;
+        if (distance(guard, nearbyCctvPanel) < soundRange && guard.state !== 'CHASE' && guard.state !== 'HIDE_CHECK') {
+          guard.lastSeen = { x: nearbyCctvPanel.x, y: nearbyCctvPanel.y };
+          detection = Math.max(detection, .32); setGuardState('INVESTIGATE');
+          logPlaytestEvent(`cctv:panel-noise:${nearbyCctvPanel.id}`);
+        }
+      }
+      return;
+    }
     const nearbySwitch = lightSwitches.find(item => !item.used && distance(player, item) < 48);
     if (nearbySwitch) {
       const groupLights = lightSources.filter(light => light.group === nearbySwitch.group);
@@ -823,7 +1359,16 @@ function interact() {
         detection = Math.max(detection, .34);
         setGuardState('INVESTIGATE');
       }
-    } else if (treasureTaken && distance(player, exit) < 65) finishGame(true);
+    } else {
+      const nearbyDoor = doors.find(item => distance(player, doorCenter(item)) < 62);
+      if (nearbyDoor) useDoor(nearbyDoor);
+      else if (treasureTaken && distance(player, exit) < 65) {
+        if (exitLockdown > 0) {
+          blockedExitAttempts++; audio.securityCue(false); stateFlash = Math.max(stateFlash, .28);
+          logPlaytestEvent('lockdown:blocked-exit');
+        } else finishGame(true);
+      }
+    }
   }
 }
 
@@ -835,10 +1380,10 @@ function draw() {
   ctx.clearRect(0, 0, VIEW.w, VIEW.h);
   const sx = shake ? (Math.random() - .5) * shake : 0; const sy = shake ? (Math.random() - .5) * shake : 0;
   ctx.save(); ctx.translate(-camera.x + sx, -camera.y + sy);
-  drawFloor(); drawObjects(); drawLighting(); drawLightSwitches(); drawHidingSpots(); drawGuardVision(); drawExit(); drawTreasures(); drawGuard(); drawPlayer(); drawForegroundFaces(); drawFog();
+  drawFloor(); drawObjects(); drawDoors(); drawLighting(); drawLightSwitches(); drawHidingSpots(); drawCctvSystem(); drawGuardVision(); drawExit(); drawTreasures(); drawKeycard(); drawNoisePulses(); drawGuard(); drawPlayer(); drawForegroundFaces(); drawFog();
   ctx.restore();
-  if (detection > 0 && state === 'playing') drawDetectionVignette();
-  if (treasureTaken && state === 'playing') drawAlarmAtmosphere();
+  if (Math.max(detection, supportDetection) > 0 && state === 'playing') drawDetectionVignette();
+  if (alertLevel > 0 && state === 'playing') drawAlarmAtmosphere();
   if (activeHidingSpot && state === 'playing') drawHidingOverlay();
   if (stateFlash > 0 && state === 'playing') drawStateFlash();
   requestAnimationFrame(frame);
@@ -879,6 +1424,41 @@ function drawObjects() {
       ctx.strokeStyle = 'rgba(214,171,84,.18)'; ctx.strokeRect(w.x + 8.5, w.y + 10.5, Math.max(0, w.w - 17), Math.max(0, w.h - 21));
     }
   });
+}
+
+function drawDoors() {
+  doors.forEach(door => {
+    const center = doorCenter(door);
+    ctx.save(); ctx.translate(center.x, center.y);
+    if (door.open) ctx.rotate(Math.PI / 2);
+    ctx.fillStyle = door.locked ? '#705235' : '#46575a';
+    ctx.strokeStyle = door.locked ? '#d6ab54' : '#83928f';
+    ctx.lineWidth = 2;
+    ctx.fillRect(-door.w / 2, -door.h / 2, door.w, door.h);
+    ctx.strokeRect(-door.w / 2 + 1, -door.h / 2 + 1, door.w - 2, door.h - 2);
+    ctx.fillStyle = door.locked ? '#e0bc68' : '#a4b1ad';
+    ctx.beginPath(); ctx.arc(door.w / 2 - 7, 0, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    if (door.locked && !door.open) {
+      ctx.fillStyle = keycard.collected ? '#74c2ad' : '#d6ab54';
+      ctx.font = '700 9px "IBM Plex Mono"'; ctx.textAlign = 'center';
+      ctx.fillText(keycard.collected ? 'ACCESS READY' : 'LOCKED', center.x, door.y - 9);
+    }
+  });
+}
+
+function drawKeycard() {
+  if (keycard.collected) return;
+  const pulse = 1 + Math.sin(visualTime * 4) * .08;
+  ctx.save(); ctx.translate(keycard.x, keycard.y); ctx.scale(pulse, pulse);
+  ctx.shadowColor = '#6dc5b2'; ctx.shadowBlur = 15;
+  ctx.fillStyle = '#7fc8b8'; ctx.strokeStyle = '#d8eee8'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.roundRect(-13, -9, 26, 18, 3); ctx.fill(); ctx.stroke();
+  ctx.shadowBlur = 0; ctx.fillStyle = '#1d4c47'; ctx.fillRect(-8, -4, 6, 8);
+  ctx.fillStyle = '#d8eee8'; ctx.fillRect(2, -4, 7, 2); ctx.fillRect(2, 1, 5, 2);
+  ctx.font = '500 9px "Noto Sans KR"'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(220,238,233,.78)';
+  ctx.fillText(keycard.name, 0, 29); ctx.restore();
 }
 
 function drawForegroundFaces() {
@@ -958,40 +1538,94 @@ function drawHidingSpots() {
   });
 }
 
+function drawCctvSystem() {
+  cctvCameras.forEach(camera => {
+    if (camera.state !== 'DISABLED' && camera.state !== 'COOLDOWN') {
+      const range = camera.range + alertLevel * 18;
+      const spread = .86; const rays = 30;
+      ctx.beginPath(); ctx.moveTo(camera.x, camera.y);
+      for (let i = 0; i <= rays; i++) {
+        const angle = camera.facing - spread / 2 + spread * i / rays;
+        const hit = castRay(camera, angle, range); ctx.lineTo(hit.x, hit.y);
+      }
+      ctx.closePath();
+      const color = camera.state === 'ALERT' ? '#ef573f' : camera.state === 'DETECTING' ? '#e7bd62' : '#72b7c5';
+      const glow = ctx.createRadialGradient(camera.x, camera.y, 8, camera.x, camera.y, range);
+      glow.addColorStop(0, colorWithAlpha(color, camera.state === 'ALERT' ? .28 : .16));
+      glow.addColorStop(1, colorWithAlpha(color, 0));
+      ctx.fillStyle = glow; ctx.fill(); ctx.strokeStyle = colorWithAlpha(color, .24); ctx.lineWidth = 1; ctx.stroke();
+    }
+
+    ctx.save(); ctx.translate(camera.x, camera.y); ctx.rotate(camera.facing);
+    const disabled = camera.state === 'DISABLED';
+    const bodyColor = disabled ? '#3d484a' : camera.state === 'ALERT' ? '#e65c47' : camera.state === 'DETECTING' ? '#d8b15b' : '#7baab2';
+    ctx.shadowColor = bodyColor; ctx.shadowBlur = disabled ? 0 : 9;
+    ctx.fillStyle = '#20282a'; ctx.fillRect(-12, -9, 19, 18);
+    ctx.fillStyle = bodyColor; ctx.beginPath(); ctx.moveTo(2, -7); ctx.lineTo(17, -5); ctx.lineTo(20, 0); ctx.lineTo(17, 5); ctx.lineTo(2, 7); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = disabled ? '#202627' : '#d8f5f6'; ctx.beginPath(); ctx.arc(16, 0, 3, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+
+    if (disabled) {
+      ctx.fillStyle = 'rgba(143,157,157,.75)'; ctx.font = '500 8px "IBM Plex Mono"'; ctx.textAlign = 'center';
+      ctx.fillText(`OFF ${Math.ceil(camera.disabledTime)}s`, camera.x, camera.y - 18);
+    }
+  });
+
+  cctvPanels.forEach(panel => {
+    ctx.save(); ctx.translate(panel.x, panel.y);
+    ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(-10, -13, 23, 29);
+    ctx.fillStyle = panel.used ? '#3f4849' : '#62797d'; ctx.fillRect(-9, -14, 18, 26);
+    ctx.strokeStyle = panel.used ? '#515b5c' : '#8dc3c9'; ctx.strokeRect(-8.5, -13.5, 17, 25);
+    ctx.fillStyle = panel.used ? '#252b2c' : '#9fe0df'; ctx.beginPath(); ctx.arc(0, -6, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.font = '600 6px "IBM Plex Mono"'; ctx.textAlign = 'center'; ctx.fillStyle = '#172022'; ctx.fillText('CAM', 0, 5); ctx.restore();
+  });
+}
+
 function drawGuardVision() {
+  drawActorVision(guard);
+  drawActorVision(supportGuard);
+}
+
+function drawActorVision(actor: GuardActor) {
   const rays = 32;
-  const range = (guard.state === 'CHASE' ? 465 : 390) + alertLevel * 18 + Math.sin(visualTime * 7.3) * 3;
-  const spread = guard.state === 'CHASE' ? 1.64 : guard.state === 'SEARCH' || guard.state === 'HIDE_CHECK' ? 1.36 : 1.12;
-  ctx.beginPath(); ctx.moveTo(guard.x, guard.y);
+  const range = (actor.state === 'CHASE' ? 465 : 390) + alertLevel * 18 + Math.sin(visualTime * 7.3) * 3;
+  const spread = actor.state === 'CHASE' ? 1.64 : actor.state === 'SEARCH' || actor.state === 'HIDE_CHECK' ? 1.36 : 1.12;
+  ctx.beginPath(); ctx.moveTo(actor.x, actor.y);
   for (let i = 0; i <= rays; i++) {
-    const a = guard.facing - spread / 2 + spread * i / rays;
-    const hit = castRay(guard, a, range);
+    const a = actor.facing - spread / 2 + spread * i / rays;
+    const hit = castRay(actor, a, range);
     ctx.lineTo(hit.x, hit.y);
   }
   ctx.closePath();
-  const grad = ctx.createRadialGradient(guard.x, guard.y, 10, guard.x, guard.y, range);
-  const visionColor = guard.state === 'CHASE' ? 'rgba(239,87,63,.30)' : guard.state === 'PATROL' ? 'rgba(196,174,91,.13)' : 'rgba(235,145,62,.20)';
+  const grad = ctx.createRadialGradient(actor.x, actor.y, 10, actor.x, actor.y, range);
+  const visionColor = actor.state === 'CHASE' ? 'rgba(239,87,63,.30)' : actor.state === 'PATROL' ? 'rgba(196,174,91,.13)' : 'rgba(235,145,62,.20)';
   grad.addColorStop(0, visionColor); grad.addColorStop(1, 'rgba(100,80,40,0)');
   ctx.fillStyle = grad; ctx.fill();
-  ctx.strokeStyle = guard.state === 'CHASE' ? 'rgba(255,101,78,.28)' : 'rgba(223,190,105,.15)';
+  ctx.strokeStyle = actor.state === 'CHASE' ? 'rgba(255,101,78,.28)' : 'rgba(223,190,105,.15)';
   ctx.lineWidth = 1; ctx.stroke();
-  const core = castRay(guard, guard.facing, range * .82);
-  const coreGrad = ctx.createLinearGradient(guard.x, guard.y, core.x, core.y);
-  coreGrad.addColorStop(0, guard.state === 'CHASE' ? 'rgba(255,105,75,.18)' : 'rgba(238,211,137,.15)');
+  const core = castRay(actor, actor.facing, range * .82);
+  const coreGrad = ctx.createLinearGradient(actor.x, actor.y, core.x, core.y);
+  coreGrad.addColorStop(0, actor.state === 'CHASE' ? 'rgba(255,105,75,.18)' : 'rgba(238,211,137,.15)');
   coreGrad.addColorStop(1, 'rgba(255,230,170,0)');
-  ctx.strokeStyle = coreGrad; ctx.lineWidth = guard.state === 'CHASE' ? 18 : 12;
-  ctx.beginPath(); ctx.moveTo(guard.x, guard.y); ctx.lineTo(core.x, core.y); ctx.stroke();
+  ctx.strokeStyle = coreGrad; ctx.lineWidth = actor.state === 'CHASE' ? 18 : 12;
+  ctx.beginPath(); ctx.moveTo(actor.x, actor.y); ctx.lineTo(core.x, core.y); ctx.stroke();
 }
 
 function drawExit() {
   ctx.save(); ctx.translate(exit.x, exit.y);
-  if (treasureTaken) {
+  const locked = exitLockdown > 0;
+  if (treasureTaken && !locked) {
     const pulse = 34 + Math.sin(visualTime * 4) * 5;
     ctx.strokeStyle = 'rgba(98,185,149,.18)'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(0, 0, pulse, 0, Math.PI * 2); ctx.stroke();
   }
-  ctx.strokeStyle = treasureTaken ? '#62b995' : '#53615d'; ctx.lineWidth = 2;
+  ctx.strokeStyle = locked ? '#e35d49' : treasureTaken ? '#62b995' : '#53615d'; ctx.lineWidth = 2;
   ctx.strokeRect(-35, -22, 70, 44); ctx.setLineDash([5, 5]); ctx.strokeRect(-43, -30, 86, 60);
-  ctx.setLineDash([]); ctx.fillStyle = treasureTaken ? '#91d9b9' : '#65716d'; ctx.font = '600 10px "IBM Plex Mono"'; ctx.textAlign = 'center'; ctx.fillText('EXIT', 0, 4); ctx.restore();
+  ctx.setLineDash([]);
+  if (locked) {
+    ctx.fillStyle = 'rgba(227,93,73,.28)';
+    for (let x = -27; x <= 27; x += 9) ctx.fillRect(x, -18, 3, 36);
+  }
+  ctx.fillStyle = locked ? '#ff8a77' : treasureTaken ? '#91d9b9' : '#65716d'; ctx.font = '600 10px "IBM Plex Mono"'; ctx.textAlign = 'center';
+  ctx.fillText(locked ? `${exitLockdown.toFixed(1)}s` : 'EXIT', 0, 4); ctx.restore();
 }
 
 function drawTreasures() {
@@ -1023,13 +1657,15 @@ function drawPlayer() {
   if (activeHidingSpot) return;
   const speed = Math.min(1, Math.hypot(player.vx, player.vy) / 180);
   const careful = keys.has('shift');
-  const gait = Math.sin(visualTime * (careful ? 7 : 12)) * 5 * speed;
+  const crouching = keys.has('c');
+  const gait = Math.sin(visualTime * (crouching ? 5.5 : careful ? 7 : 12)) * (crouching ? 3 : 5) * speed;
   ctx.save(); ctx.translate(player.x, player.y);
+  if (crouching) ctx.scale(1, .72);
   ctx.fillStyle = 'rgba(0,0,0,.42)'; ctx.beginPath(); ctx.ellipse(5, 8, 18, 9, player.facing, 0, Math.PI * 2); ctx.fill();
   ctx.rotate(player.facing);
   ctx.strokeStyle = '#33534f'; ctx.lineWidth = 5; ctx.lineCap = 'round';
   ctx.beginPath(); ctx.moveTo(-5, -5); ctx.lineTo(-11 - Math.abs(gait) * .35, -6 + gait); ctx.moveTo(-5, 5); ctx.lineTo(-11 - Math.abs(gait) * .35, 6 - gait); ctx.stroke();
-  ctx.shadowColor = '#6cc4b2'; ctx.shadowBlur = 14; ctx.fillStyle = careful ? '#88b9ae' : '#abd8ce';
+  ctx.shadowColor = '#6cc4b2'; ctx.shadowBlur = crouching ? 7 : 14; ctx.fillStyle = crouching ? '#6e9c93' : careful ? '#88b9ae' : '#abd8ce';
   ctx.beginPath(); ctx.roundRect(-10, -10, 21, 20, 8); ctx.fill();
   ctx.shadowBlur = 0; ctx.fillStyle = '#d7eee8'; ctx.beginPath(); ctx.arc(8, 0, 6, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = '#315b55'; ctx.beginPath(); ctx.moveTo(12, 0); ctx.lineTo(3, -3); ctx.lineTo(3, 3); ctx.closePath(); ctx.fill();
@@ -1039,45 +1675,86 @@ function drawPlayer() {
   ctx.restore();
 }
 
+function drawNoisePulses() {
+  noisePulses.forEach(pulse => {
+    const progress = pulse.age / pulse.duration;
+    const radius = pulse.radius * (.12 + progress * .88);
+    ctx.save();
+    const subtle = pulse.mode !== 'normal';
+    const color = pulse.mode === 'crouch' ? '104,151,143' : pulse.mode === 'careful' ? '112,190,169' : '220,178,92';
+    ctx.strokeStyle = `rgba(${color},${(1 - progress) * (pulse.mode === 'crouch' ? .08 : subtle ? .12 : .18)})`;
+    ctx.lineWidth = subtle ? 1 : 1.5;
+    ctx.setLineDash(subtle ? [3, 8] : [5, 7]);
+    ctx.beginPath(); ctx.arc(pulse.x, pulse.y, radius, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  });
+}
+
 function drawGuard() {
-  const moving = guard.state !== 'SUSPICIOUS';
-  const gait = moving ? Math.sin(visualTime * (guard.state === 'CHASE' ? 14 : 8.5)) * (guard.state === 'CHASE' ? 5 : 3.5) : 0;
-  ctx.save(); ctx.translate(guard.x, guard.y);
-  ctx.fillStyle = 'rgba(0,0,0,.46)'; ctx.beginPath(); ctx.ellipse(6, 9, 20, 10, guard.facing, 0, Math.PI * 2); ctx.fill();
-  ctx.rotate(guard.facing);
-  const alerted = guard.state !== 'PATROL';
+  drawGuardActor(guard, '#d6ab54');
+  drawGuardActor(supportGuard, '#7da8c3');
+}
+
+function drawGuardActor(actor: GuardActor, patrolColor: string) {
+  const moving = actor.state !== 'SUSPICIOUS';
+  const gait = moving ? Math.sin(visualTime * (actor.state === 'CHASE' ? 14 : 8.5) + (actor.id === supportGuard.id ? 1.4 : 0)) * (actor.state === 'CHASE' ? 5 : 3.5) : 0;
+  ctx.save(); ctx.translate(actor.x, actor.y);
+  ctx.fillStyle = 'rgba(0,0,0,.46)'; ctx.beginPath(); ctx.ellipse(6, 9, 20, 10, actor.facing, 0, Math.PI * 2); ctx.fill();
+  ctx.rotate(actor.facing);
+  const alerted = actor.state !== 'PATROL';
   ctx.strokeStyle = alerted ? '#755138' : '#5d543b'; ctx.lineWidth = 6; ctx.lineCap = 'round';
   ctx.beginPath(); ctx.moveTo(-6, -6); ctx.lineTo(-13, -7 + gait); ctx.moveTo(-6, 6); ctx.lineTo(-13, 7 - gait); ctx.stroke();
-  ctx.shadowColor = guard.state === 'CHASE' ? '#ef573f' : alerted ? '#e58d42' : '#d6ab54'; ctx.shadowBlur = guard.state === 'CHASE' ? 18 : alerted ? 12 : 7;
-  ctx.fillStyle = guard.state === 'CHASE' ? '#ef6b54' : alerted ? '#df954e' : '#b69a5e'; ctx.beginPath(); ctx.roundRect(-11, -11, 23, 22, 7); ctx.fill();
+  ctx.shadowColor = actor.state === 'CHASE' ? '#ef573f' : alerted ? '#e58d42' : patrolColor; ctx.shadowBlur = actor.state === 'CHASE' ? 18 : alerted ? 12 : 7;
+  ctx.fillStyle = actor.state === 'CHASE' ? '#ef6b54' : alerted ? '#df954e' : patrolColor; ctx.beginPath(); ctx.roundRect(-11, -11, 23, 22, 7); ctx.fill();
   ctx.shadowBlur = 0; ctx.fillStyle = '#d7c79f'; ctx.beginPath(); ctx.arc(9, 0, 6.5, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = '#171b1c'; ctx.fillRect(5, -7, 7, 14);
   ctx.strokeStyle = '#34302a'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(4, -8); ctx.lineTo(15, -11); ctx.stroke();
   ctx.fillStyle = '#ead891'; ctx.fillRect(14, -13, 7, 4); ctx.restore();
-  if (guard.state === 'SUSPICIOUS' || guard.state === 'INVESTIGATE' || guard.state === 'SEARCH' || guard.state === 'HIDE_CHECK') {
+  if (actor.state === 'SUSPICIOUS' || actor.state === 'INVESTIGATE' || actor.state === 'SEARCH' || actor.state === 'HIDE_CHECK') {
     ctx.fillStyle = '#f0b465'; ctx.font = '700 18px "IBM Plex Mono"'; ctx.textAlign = 'center';
-    ctx.fillText(guard.state === 'SEARCH' ? '…' : guard.state === 'HIDE_CHECK' ? '!' : '?', guard.x, guard.y - 27);
+    ctx.fillText(actor.state === 'SEARCH' ? '…' : actor.state === 'HIDE_CHECK' ? '!' : '?', actor.x, actor.y - 27);
   }
 }
 
 function castRay(origin: Point, angle: number, maxRange: number): Point {
-  const steps = Math.ceil(maxRange / 5);
-  for (let i = 1; i <= steps; i++) {
-    const d = i * 5; const x = origin.x + Math.cos(angle) * d; const y = origin.y + Math.sin(angle) * d;
-    if (walls.some(w => x >= w.x && x <= w.x + w.w && y >= w.y && y <= w.y + w.h)) return { x, y };
-  }
-  return { x: origin.x + Math.cos(angle) * maxRange, y: origin.y + Math.sin(angle) * maxRange };
+  return castVisionRay(origin, angle, maxRange, visionBlockers());
+}
+
+function validateCctvCoverage() {
+  cctvCameras.forEach(camera => {
+    const samples = 25;
+    let totalDistance = 0;
+    let shortRays = 0;
+    for (let index = 0; index < samples; index++) {
+      const angle = camera.minAngle + (camera.maxAngle - camera.minAngle) * index / (samples - 1);
+      const rayDistance = distance(camera, castRay(camera, angle, camera.range));
+      totalDistance += rayDistance;
+      if (rayDistance < 90) shortRays++;
+    }
+    const averageDistance = totalDistance / samples;
+    if (averageDistance < camera.range * .35 || shortRays / samples > .5) {
+      console.warn(`[Shadow Heist] ${camera.name}의 시야가 벽에 과도하게 막혀 있습니다.`, { averageDistance: Math.round(averageDistance), shortRayRatio: shortRays / samples });
+    }
+  });
 }
 
 function drawFog() {
-  fogCtx.clearRect(0, 0, WORLD.w, WORLD.h);
-  fogCtx.globalCompositeOperation = 'source-over';
-  fogCtx.fillStyle = treasureTaken ? 'rgba(2,4,5,.87)' : 'rgba(2,4,5,.82)';
-  fogCtx.fillRect(0, 0, WORLD.w, WORLD.h);
-  fogCtx.globalCompositeOperation = 'destination-out';
   const rays = 180; const points: Point[] = [];
   const visionRadius = currentPlayerVision();
   for (let i = 0; i <= rays; i++) points.push(castRay(player, Math.PI * 2 * i / rays, visionRadius));
+
+  exploredCtx.globalCompositeOperation = 'source-over';
+  exploredCtx.fillStyle = '#fff';
+  exploredCtx.beginPath(); exploredCtx.moveTo(player.x, player.y); points.forEach(point => exploredCtx.lineTo(point.x, point.y)); exploredCtx.closePath(); exploredCtx.fill();
+
+  fogCtx.clearRect(0, 0, WORLD.w, WORLD.h);
+  fogCtx.globalCompositeOperation = 'source-over';
+  fogCtx.fillStyle = treasureTaken ? 'rgba(2,4,5,.94)' : 'rgba(2,4,5,.92)';
+  fogCtx.fillRect(0, 0, WORLD.w, WORLD.h);
+  fogCtx.globalCompositeOperation = 'destination-out';
+  fogCtx.globalAlpha = treasureTaken ? .12 : .1;
+  fogCtx.drawImage(exploredCanvas, 0, 0);
+  fogCtx.globalAlpha = 1;
   fogCtx.beginPath(); fogCtx.moveTo(player.x, player.y); points.forEach(p => fogCtx.lineTo(p.x, p.y)); fogCtx.closePath();
   const grad = fogCtx.createRadialGradient(player.x, player.y, 55, player.x, player.y, visionRadius);
   grad.addColorStop(0, 'rgba(0,0,0,1)'); grad.addColorStop(.72, 'rgba(0,0,0,.96)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
@@ -1089,13 +1766,14 @@ function drawFog() {
 }
 
 function drawDetectionVignette() {
-  const alpha = Math.min(.72, detection * .65 + (guard.state === 'CHASE' ? .15 : 0));
+  const activeDetection = Math.max(detection, supportDetection);
+  const alpha = Math.min(.72, activeDetection * .65 + (guard.state === 'CHASE' || supportGuard.state === 'CHASE' ? .15 : 0));
   const grad = ctx.createRadialGradient(VIEW.w / 2, VIEW.h / 2, 180, VIEW.w / 2, VIEW.h / 2, 650);
   grad.addColorStop(.4, 'rgba(150,15,8,0)'); grad.addColorStop(1, `rgba(180,26,13,${alpha})`);
   ctx.fillStyle = grad; ctx.fillRect(0, 0, VIEW.w, VIEW.h);
-  if (detection < 1) {
-    ctx.strokeStyle = `rgba(239,87,63,${.3 + detection * .6})`; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(VIEW.w / 2, 95, 22, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * detection); ctx.stroke();
+  if (activeDetection < 1) {
+    ctx.strokeStyle = `rgba(239,87,63,${.3 + activeDetection * .6})`; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(VIEW.w / 2, 95, 22, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * activeDetection); ctx.stroke();
     ctx.fillStyle = '#ffc0b3'; ctx.font = '600 9px "IBM Plex Mono"'; ctx.textAlign = 'center'; ctx.fillText('DETECTED', VIEW.w / 2, 99);
   }
 }
@@ -1113,7 +1791,7 @@ function drawAlarmAtmosphere() {
 }
 
 function drawStateFlash() {
-  const danger = guard.state === 'CHASE';
+  const danger = guard.state === 'CHASE' || supportGuard.state === 'CHASE';
   ctx.strokeStyle = danger ? `rgba(255,72,48,${stateFlash * .8})` : `rgba(238,170,72,${stateFlash * .65})`;
   ctx.lineWidth = 10 * stateFlash;
   ctx.strokeRect(5, 5, VIEW.w - 10, VIEW.h - 10);
@@ -1124,7 +1802,7 @@ function drawStateFlash() {
 }
 
 function drawHidingOverlay() {
-  const guardDistance = distance(player, guard);
+  const guardDistance = Math.min(distance(player, guard), distance(player, supportGuard));
   const pressure = Math.max(0, 1 - guardDistance / 360);
   const pulse = .5 + Math.sin(visualTime * (3 + pressure * 5)) * .5;
   const vignette = ctx.createRadialGradient(VIEW.w / 2, VIEW.h / 2, 85, VIEW.w / 2, VIEW.h / 2, 520);
@@ -1158,4 +1836,5 @@ addEventListener('blur', () => keys.clear());
 document.querySelector('#startButton')!.addEventListener('click', startGame);
 document.querySelector('#retryButton')!.addEventListener('click', startGame);
 
+validateCctvCoverage();
 camera.x = 0; camera.y = WORLD.h - VIEW.h; requestAnimationFrame(frame);

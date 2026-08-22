@@ -59,14 +59,28 @@ SHADOW-HEIST_V2/
 ├─ tsconfig.json
 ├─ src/
 │  ├─ main.ts
+│  ├─ cctv.ts
+│  ├─ doors.ts
+│  ├─ exploration.ts
+│  ├─ guards.ts
 │  ├─ hiding.ts
+│  ├─ noise.ts
+│  ├─ security.ts
+│  ├─ vision.ts
 │  └─ style.css
 └─ docs/
 ```
 
 - `index.html`: Canvas, 시작 화면, HUD, 결과 화면의 HTML 구조
 - `src/main.ts`: 게임 상태, 이동, AI, 시야, 조명, 사운드, 렌더링
+- `src/cctv.ts`: CCTV와 제어반의 종류, 위치, 초기 상태
+- `src/doors.ts`: 문과 키카드의 이름, 위치, 잠금 및 초기 상태
+- `src/exploration.ts`: 탐색률 계산에 사용하는 격자 생성과 백분율 계산
+- `src/guards.ts`: 경비 자료형, 브라보 경비 초기 상태와 순찰 경로
 - `src/hiding.ts`: 은신처 종류, 이름, 맵 배치 데이터
+- `src/noise.ts`: 일반·조심·웅크리기별 소음 범위와 벽·경계 단계에 따른 청취 거리 계산
+- `src/security.ts`: CCTV와 마지막 보물 조건에 따른 출구 봉쇄 시간 계산
+- `src/vision.ts`: 경비, 플레이어, 조명, CCTV가 함께 사용하는 LOS와 광선 계산
 - `src/style.css`: 메뉴와 HUD 디자인
 - `package.json`: 실행 명령과 개발 도구 목록
 - `tsconfig.json`: TypeScript 검사 설정
