@@ -3,7 +3,7 @@ export const BALANCE = {
     walkSpeed: 150,
     runSpeed: 215,
     crouchSpeed: 88,
-    minimumVision: 215,
+    minimumVision: 230,
     crouchVisionPenalty: 24,
     crouchDetectionMultiplier: .7,
   },
@@ -25,14 +25,6 @@ export const BALANCE = {
     chaseVision: 465,
     patrolVisionAngle: .56,
     chaseVisionAngle: .82,
-    darkZoneVisionMultiplier: .85,
-    darkZoneVisualRangeMultiplier: .62,
-  },
-  lighting: {
-    playerDarkZoneVisionMultiplier: .78,
-    switchCooldown: 4,
-    guardInvestigationRadiusOff: 640,
-    guardInvestigationRadiusOn: 420,
   },
   cctv: {
     exposureRangeBase: .72,

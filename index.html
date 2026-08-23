@@ -11,7 +11,7 @@
       <canvas id="game" aria-label="Shadow Heist 게임 화면"></canvas>
 
       <section id="hud" aria-live="polite">
-        <div class="brand"><span>SHADOW</span> HEIST <small>PROTOTYPE 29</small></div>
+        <div class="brand"><span>SHADOW</span> HEIST <small>PROTOTYPE 32</small></div>
         <div class="objective">
           <span class="label">OBJECTIVE</span>
           <strong id="objectiveText">보물을 훔치고 살아서 돌아오세요</strong>
@@ -21,7 +21,7 @@
 
       <section id="soundMeter" aria-label="경비원 발소리 청취 안내">
         <span class="sound-label">LISTEN</span>
-        <span>헤드폰 권장</span>
+        <span id="soundDirection">헤드폰 권장</span>
       </section>
 
       <section id="onboarding" class="onboarding hidden" aria-live="polite">
@@ -66,9 +66,9 @@
       </aside>
 
       <section id="startScreen" class="screen visible">
-        <div class="eyebrow">TENSION TEST // NIGHT 01</div>
+        <div class="eyebrow" id="startHeistLabel">HEIST 01 // FIRST JOB</div>
         <h1>소리만 믿고<br><em>훔쳐라.</em></h1>
-        <p>경비원들은 어둠 속에서 무전으로 정보를 공유합니다. 가장 가까운 발소리를 읽고<br>보물을 챙겨 입구로 돌아오세요.</p>
+        <p id="startHeistDescription">첫 임무입니다. 경비 한 명의 시야를 피해 유물을 챙겨 입구로 돌아오세요.</p>
         <button id="startButton">잠입 시작 <span>→</span></button>
         <div class="controls"><b>WASD / 방향키</b> 저소음 이동 <b>SHIFT</b> 달리기·큰 소음 <b>C</b> 웅크리기 <b>E</b> 상호작용</div>
       </section>
@@ -84,8 +84,13 @@
           <span>발각 횟수 <b id="resultSpotted">0</b></span>
           <span>최고 감지 <b id="resultDetection">0%</b></span>
           <span>추격 시간 <b id="resultChase">0.0s</b></span>
+          <span>잠입 보너스 <b id="resultStealthBonus">0</b></span>
+          <span>최고 기록 <b id="resultBest">0</b></span>
         </div>
-        <button id="retryButton">다시 잠입 <span>↻</span></button>
+        <div class="result-actions">
+          <button id="nextHeistButton" class="hidden">다음 Heist <span>→</span></button>
+          <button id="retryButton">다시 잠입 <span>↻</span></button>
+        </div>
       </section>
     </main>
     <script type="module" src="/src/main.ts"></script>
