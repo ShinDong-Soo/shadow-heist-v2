@@ -14,7 +14,7 @@ type Point = { x: number; y: number };
 type Rect = { x: number; y: number; w: number; h: number };
 type Treasure = Point & { id: string; name: string; value: number; color: string; collected: boolean };
 type LightSource = Point & { id: string; radius: number; intensity: number; color: string; group: string; on: boolean; defaultOn: boolean; linkedTreasure?: string; emergencyLevel?: number; flicker?: boolean };
-type LightSwitch = Point & { id: string; group: string; used: boolean };
+type LightSwitch = Point & { id: string; group: string; cooldown: number };
 type GameState = 'menu' | 'playing' | 'won' | 'caught';
 type PlaytestEvent = { time: number; type: string; x: number; y: number };
 
@@ -76,7 +76,7 @@ const GUARD_RADIUS = 16;
 const PLAYER_ANIMATION = {
   frameCount: 4,
   idleSpeedThreshold: 5,
-  strideLength: { normal: 140, careful: 136, crouch: 128 } satisfies Record<MovementMode, number>,
+  strideLength: { walk: 136, run: 150, crouch: 128 } satisfies Record<MovementMode, number>,
   pivot: 'bottom-center',
 } as const;
 
@@ -124,6 +124,7 @@ let maxExposure = .12;
 let brightTime = 0;
 let darkTime = 0;
 let switchesUsed = 0;
+let lightSwitchInvestigations = 0;
 let activeHidingSpot: HidingSpot | null = null;
 let hidingTime = 0;
 let hideEntries = 0;
@@ -155,9 +156,9 @@ let devPanelOpen = false;
 let debugPaths = false;
 let showNoiseWaves = true;
 let devPanelTimer = 0;
-let currentMovementMode: MovementMode = 'normal';
-let carefulWalkTime = 0;
-let normalWalkTime = 0;
+let currentMovementMode: MovementMode = 'walk';
+let walkTime = 0;
+let runTime = 0;
 let crouchTime = 0;
 let playerStepTimer = 0;
 let playerFrameDistance = 0;
@@ -224,9 +225,9 @@ const lightSources: LightSource[] = [
   { id: 'alarm-east', x: 1460, y: 550, radius: 215, intensity: .72, color: '#e14f39', group: 'alarm', on: true, defaultOn: true, emergencyLevel: 3 },
 ];
 const lightSwitches: LightSwitch[] = [
-  { id: 'west-switch', x: 270, y: 365, group: 'west', used: false },
-  { id: 'central-switch', x: 730, y: 535, group: 'central', used: false },
-  { id: 'east-switch', x: 1325, y: 555, group: 'east', used: false },
+  { id: 'west-switch', x: 270, y: 365, group: 'west', cooldown: 0 },
+  { id: 'central-switch', x: 730, y: 535, group: 'central', cooldown: 0 },
+  { id: 'east-switch', x: 1325, y: 555, group: 'east', cooldown: 0 },
 ];
 const hidingCollisionRects = hidingSpots.map(hidingSpotBounds);
 const deviceCollisionRects: Rect[] = [
@@ -559,15 +560,15 @@ class AudioEngine {
 
   playerStep(mode: MovementMode) {
     if (!this.context || !this.master) return;
-    const careful = mode !== 'normal';
+    const running = mode === 'run';
     const crouching = mode === 'crouch';
     const t = this.context.currentTime;
     const osc = this.context.createOscillator(); const gain = this.context.createGain(); const filter = this.context.createBiquadFilter();
-    osc.type = careful ? 'sine' : 'triangle';
-    osc.frequency.setValueAtTime(crouching ? 82 : careful ? 105 : 135, t);
-    osc.frequency.exponentialRampToValueAtTime(crouching ? 48 : careful ? 62 : 48, t + .09);
-    filter.type = 'lowpass'; filter.frequency.value = crouching ? 380 : careful ? 520 : 900;
-    gain.gain.setValueAtTime(.0001, t); gain.gain.exponentialRampToValueAtTime(crouching ? .005 : careful ? .009 : .022, t + .008); gain.gain.exponentialRampToValueAtTime(.0001, t + .11);
+    osc.type = running ? 'triangle' : 'sine';
+    osc.frequency.setValueAtTime(crouching ? 82 : running ? 145 : 105, t);
+    osc.frequency.exponentialRampToValueAtTime(crouching ? 48 : running ? 46 : 62, t + .09);
+    filter.type = 'lowpass'; filter.frequency.value = crouching ? 380 : running ? 980 : 520;
+    gain.gain.setValueAtTime(.0001, t); gain.gain.exponentialRampToValueAtTime(crouching ? .005 : running ? .026 : .009, t + .008); gain.gain.exponentialRampToValueAtTime(.0001, t + .11);
     osc.connect(gain).connect(filter).connect(this.master); osc.start(t); osc.stop(t + .12);
   }
 }
@@ -601,14 +602,14 @@ function updateExposureHud() {
 }
 
 function updateNoiseHud(mode: MovementMode, moving: boolean) {
-  const tone = !moving ? 'silent' : mode === 'crouch' ? 'crouch' : mode === 'careful' ? 'quiet' : 'loud';
-  noiseText.textContent = tone === 'silent' ? '정지' : tone === 'crouch' ? '웅크림' : tone === 'quiet' ? '조용함' : '발소리';
+  const tone = !moving ? 'silent' : mode === 'crouch' ? 'crouch' : mode === 'run' ? 'loud' : 'quiet';
+  noiseText.textContent = tone === 'silent' ? '정지' : tone === 'crouch' ? '웅크림' : tone === 'quiet' ? '저소음' : '큰 소음';
   noiseReadout.className = `noise-readout ${tone}`;
 }
 
 const onboardingMessages = [
   { title: '어둠 속에서 이동하세요', detail: '<b>WASD</b> 또는 방향키로 출구에서 벗어나세요.' },
-  { title: '발소리를 줄이세요', detail: '<b>SHIFT</b> 조심 걷기 또는 <b>C</b> 웅크리기를 잠시 사용하세요.' },
+  { title: '위험을 감수하고 달리세요', detail: '<b>SHIFT</b>를 누르면 빨라지지만 발소리가 크게 퍼집니다.' },
   { title: '경비의 위치를 들으세요', detail: '왼쪽 아래 발소리 표시의 방향과 거리를 확인하세요.' },
   { title: '첫 보물을 확보하세요', detail: '빛과 벽을 이용해 경비 시야를 피하고 <b>E</b>로 훔치세요.' },
   { title: '지금 탈출할 수 있습니다', detail: '더 훔치면 점수는 오르지만 <b>발소리와 경계</b>도 커집니다.' },
@@ -616,7 +617,7 @@ const onboardingMessages = [
 
 function updateOnboarding() {
   if (onboardingStage === 0 && onboardingDistance >= 70) onboardingStage = 1;
-  if (onboardingStage === 1 && carefulWalkTime + crouchTime >= .9) onboardingStage = 2;
+  if (onboardingStage === 1 && runTime >= .7) onboardingStage = 2;
   if (onboardingStage === 2 && firstDangerCueAt >= 0) onboardingStage = 3;
   if (onboardingStage === 3 && firstTreasureAt >= 0) {
     onboardingStage = 4;
@@ -720,7 +721,7 @@ function resetGame() {
   audio.nextAlarm = 0; audio.nextHum = 0; audio.nextCameraMotor = 0; audio.nextSteps.clear(); audio.guardLevels.clear();
   treasures.forEach(item => { item.collected = false; });
   lightSources.forEach(light => { light.on = light.defaultOn; });
-  lightSwitches.forEach(item => { item.used = false; });
+  lightSwitches.forEach(item => { item.cooldown = 0; });
   cctvCameras.forEach(camera => {
     camera.facing = (camera.minAngle + camera.maxAngle) / 2; camera.direction = 1; camera.state = 'SCAN';
     camera.stateTime = 0; camera.detection = 0; camera.disabledTime = 0; camera.disabledPassRecorded = false;
@@ -731,10 +732,10 @@ function resetGame() {
   lightPolygonCache.clear();
   treasureTaken = false; alertLevel = 0; lootScore = 0; finalScore = 0;
   playerExposure = .12;
-  maxExposure = .12; brightTime = 0; darkTime = 0; switchesUsed = 0;
+  maxExposure = .12; brightTime = 0; darkTime = 0; switchesUsed = 0; lightSwitchInvestigations = 0;
   activeHidingSpot = null; hidingTime = 0; hideEntries = 0; safeHides = 0;
   hideChecks = 0; hiddenCaptures = 0; noiseInvestigations = 0;
-  playerFootsteps = 0; heardFootsteps = 0; footstepInvestigations = 0; carefulWalkTime = 0; normalWalkTime = 0; crouchTime = 0;
+  playerFootsteps = 0; heardFootsteps = 0; footstepInvestigations = 0; walkTime = 0; runTime = 0; crouchTime = 0;
   doorsOpened = 0; doorsClosed = 0; lockedAttempts = 0; doorNoiseInvestigations = 0;
   supportDetection = 0; radioMessages = 0; sharedInvestigations = 0; radioCooldown = 0;
   exitLockdown = 0; lockdownsTriggered = 0; lockdownExtensions = 0; blockedExitAttempts = 0;
@@ -756,7 +757,7 @@ function resetGame() {
   setStatus('미탐지', false);
   updateMissionHud();
   updateExposureHud();
-  updateNoiseHud('normal', false);
+  updateNoiseHud('walk', false);
   accessText.textContent = '없음';
   mapText.textContent = '0%';
   cameraWarning.classList.add('hidden'); cameraWarning.classList.remove('alert');
@@ -793,7 +794,7 @@ function finishGame(won: boolean) {
 
 function savePlaytestRun(won: boolean) {
   const run = {
-    version: 'prototype-27',
+    version: 'prototype-29',
     finishedAt: new Date().toISOString(),
     result: won ? 'escaped' : 'caught',
     duration: Number(elapsed.toFixed(2)),
@@ -810,6 +811,7 @@ function savePlaytestRun(won: boolean) {
     brightTime: Number(brightTime.toFixed(2)),
     darkTime: Number(darkTime.toFixed(2)),
     switchesUsed,
+    lightSwitchInvestigations,
     hidingTime: Number(hidingTime.toFixed(2)),
     hideEntries,
     safeHides,
@@ -819,8 +821,8 @@ function savePlaytestRun(won: boolean) {
     playerFootsteps,
     heardFootsteps,
     footstepInvestigations,
-    carefulWalkTime: Number(carefulWalkTime.toFixed(2)),
-    normalWalkTime: Number(normalWalkTime.toFixed(2)),
+    walkTime: Number(walkTime.toFixed(2)),
+    runTime: Number(runTime.toFixed(2)),
     crouchTime: Number(crouchTime.toFixed(2)),
     hasKeycard: keycard.collected,
     doorsOpened,
@@ -967,8 +969,25 @@ function collidesCircle(x: number, y: number, r: number) {
     || deviceCollisionRects.some(rect => circleIntersectsRect(point, r, rect));
 }
 
+function isInsideOpenDoorPassage(x: number, y: number, r: number) {
+  return doors.some(door => {
+    if (!door.open) return false;
+    const approachPadding = r + 22;
+    const edgePadding = r + 2;
+    if (door.h >= door.w) {
+      return x >= door.x - approachPadding && x <= door.x + door.w + approachPadding
+        && y >= door.y + edgePadding && y <= door.y + door.h - edgePadding;
+    }
+    return y >= door.y - approachPadding && y <= door.y + door.h + approachPadding
+      && x >= door.x + edgePadding && x <= door.x + door.w - edgePadding;
+  });
+}
+
 function collidesActorSilhouette(x: number, y: number, r: number) {
   if (collidesCircle(x, y, r)) return true;
+  // 열린 문 안에서는 발 충돌만 사용한다. 위쪽으로 치우친 상체 보조 원이
+  // 문틀 양옆 벽을 동시에 잡아 통로를 실제보다 좁히는 현상을 막는다.
+  if (isInsideOpenDoorPassage(x, y, r)) return false;
   const solidArchitecture = visionBlockers();
   const upperBodyProbes = [
     { x, y: y - 30, radius: r * .85 },
@@ -1012,9 +1031,33 @@ function lightLevelAt(point: Point) {
   return Math.max(.08, Math.min(1.15, level));
 }
 
+function lightGroupPowered(group: string) {
+  return lightSources.some(light => light.group === group && isLightActive(light));
+}
+
+function controlledLightGroupAt(point: Point) {
+  let match: { group: string; score: number } | null = null;
+  for (const item of lightSwitches) {
+    for (const light of lightSources) {
+      if (light.group !== item.group) continue;
+      const d = distance(point, light);
+      if (d > light.radius * 1.12 || !hasLineOfSight(point, light)) continue;
+      const score = d / light.radius;
+      if (!match || score < match.score) match = { group: item.group, score };
+    }
+  }
+  return match?.group ?? null;
+}
+
+function isControlledZoneDark(point: Point) {
+  const group = controlledLightGroupAt(point);
+  return group !== null && !lightGroupPowered(group);
+}
+
 function currentPlayerVision() {
   if (activeHidingSpot) return 125;
-  return BALANCE.player.minimumVision + playerExposure * 112 - (keys.has('c') ? BALANCE.player.crouchVisionPenalty : 0);
+  const baseVision = BALANCE.player.minimumVision + playerExposure * 112 - (keys.has('c') ? BALANCE.player.crouchVisionPenalty : 0);
+  return baseVision * (isControlledZoneDark(player) ? BALANCE.lighting.playerDarkZoneVisionMultiplier : 1);
 }
 
 function updateExploration(dt: number) {
@@ -1033,9 +1076,16 @@ function updateExploration(dt: number) {
 
 function playerConcealmentMultiplier() { return keys.has('c') && !activeHidingSpot ? BALANCE.player.crouchDetectionMultiplier : 1; }
 
+function guardVisionRange(actor: GuardActor, point: Point, exposure = playerExposure) {
+  const chaseVision = actor.state === 'CHASE';
+  const darkZoneMultiplier = isControlledZoneDark(point) ? BALANCE.guard.darkZoneVisionMultiplier : 1;
+  return ((chaseVision ? BALANCE.guard.chaseVision : BALANCE.guard.patrolVision) + alertLevel * 18)
+    * (.68 + exposure * .55) * playerConcealmentMultiplier() * darkZoneMultiplier;
+}
+
 function actorCanSeePoint(actor: GuardActor, point: Point, exposure = playerExposure) {
   const chaseVision = actor.state === 'CHASE';
-  const range = ((chaseVision ? BALANCE.guard.chaseVision : BALANCE.guard.patrolVision) + alertLevel * 18) * (.68 + exposure * .55) * playerConcealmentMultiplier();
+  const range = guardVisionRange(actor, point, exposure);
   const angle = chaseVision ? BALANCE.guard.chaseVisionAngle : BALANCE.guard.patrolVisionAngle;
   const direction = Math.atan2(point.y - actor.y, point.x - actor.x);
   return distance(actor, point) < range && Math.abs(angleDelta(direction, actor.facing)) < angle && hasLineOfSight(actor, point);
@@ -1268,9 +1318,10 @@ function emitPlayerFootstep(mode: MovementMode) {
     heardFootsteps++;
     if (actor.state !== 'INVESTIGATE') footstepInvestigations++;
     actor.lastSeen = { x: player.x, y: player.y };
-    const detectionFloor = mode === 'crouch' ? .1 : mode === 'careful' ? .18 : .3;
-    if (actor.id === guard.id) { detection = Math.max(detection, detectionFloor); setGuardState('INVESTIGATE', `${mode === 'normal' ? '큰' : '희미한'} 발소리 감지`); }
-    else { supportDetection = Math.max(supportDetection, detectionFloor * .94); setSupportGuardState('INVESTIGATE', `${mode === 'normal' ? '큰' : '희미한'} 발소리 감지`); }
+    const detectionFloor = mode === 'crouch' ? .1 : mode === 'run' ? .34 : .16;
+    const footstepReason = mode === 'run' ? '큰 발소리 감지' : '희미한 발소리 감지';
+    if (actor.id === guard.id) { detection = Math.max(detection, detectionFloor); setGuardState('INVESTIGATE', footstepReason); }
+    else { supportDetection = Math.max(supportDetection, detectionFloor * .94); setSupportGuardState('INVESTIGATE', footstepReason); }
     logPlaytestEvent(`noise:footstep:${actor.id}:${mode}`);
   });
 }
@@ -1389,16 +1440,17 @@ function update(dt: number, now: number) {
   elapsed += dt;
   devPanelTimer = Math.max(0, devPanelTimer - dt);
   radioCooldown = Math.max(0, radioCooldown - dt);
+  lightSwitches.forEach(item => { item.cooldown = Math.max(0, item.cooldown - dt); });
   updateExitLockdown(dt, now);
   stateFlash = Math.max(0, stateFlash - dt * 2.2);
   if (alertLevel > 0) treasureBeat += dt;
   const xInput = activeHidingSpot ? 0 : (keys.has('d') || keys.has('arrowright') ? 1 : 0) - (keys.has('a') || keys.has('arrowleft') ? 1 : 0);
   const yInput = activeHidingSpot ? 0 : (keys.has('s') || keys.has('arrowdown') ? 1 : 0) - (keys.has('w') || keys.has('arrowup') ? 1 : 0);
   const len = Math.hypot(xInput, yInput) || 1;
-  const careful = keys.has('shift');
+  const running = keys.has('shift');
   const crouching = keys.has('c');
-  currentMovementMode = crouching ? 'crouch' : careful ? 'careful' : 'normal';
-  const speed = crouching ? BALANCE.player.crouchSpeed : careful ? BALANCE.player.carefulSpeed : BALANCE.player.normalSpeed;
+  currentMovementMode = crouching ? 'crouch' : running ? 'run' : 'walk';
+  const speed = crouching ? BALANCE.player.crouchSpeed : running ? BALANCE.player.runSpeed : BALANCE.player.walkSpeed;
   const tx = xInput / len * speed; const ty = yInput / len * speed;
   player.vx += (tx - player.vx) * Math.min(1, dt * 12);
   player.vy += (ty - player.vy) * Math.min(1, dt * 12);
@@ -1422,7 +1474,7 @@ function update(dt: number, now: number) {
   const playerMoving = !activeHidingSpot && actualPlayerSpeed > 35;
   playerStepTimer -= dt;
   if (playerMoving) {
-    if (crouching) crouchTime += dt; else if (careful) carefulWalkTime += dt; else normalWalkTime += dt;
+    if (crouching) crouchTime += dt; else if (running) runTime += dt; else walkTime += dt;
     if (playerStepTimer <= 0) emitPlayerFootstep(currentMovementMode);
   } else playerStepTimer = Math.min(playerStepTimer, .08);
   noisePulses.forEach(pulse => { pulse.age += dt; });
@@ -1551,18 +1603,20 @@ function update(dt: number, now: number) {
   const nearbyKeycard = !keycard.collected && distance(player, keycard) < 48 ? keycard : null;
   const nearbyHide = activeHidingSpot ?? hidingSpots.find(item => distance(player, hidingEntryPoint(item)) < 52);
   const nearbyCctvPanel = cctvPanels.find(item => !item.used && distance(player, item) < 48);
-  const nearbySwitch = lightSwitches.find(item => !item.used && distance(player, item) < 48);
+  const nearbySwitch = lightSwitches.find(item => distance(player, item) < 48);
   const nearbyDoor = doors.find(item => distance(player, doorCenter(item)) < 62);
   const nearExit = treasureTaken && distance(player, exit) < 65;
   prompt.classList.toggle('hidden', !nearbyTreasure && !nearbyKeycard && !nearbyHide && !nearbyCctvPanel && !nearbySwitch && !nearbyDoor && !nearExit);
-  const switchOn = nearbySwitch ? lightSources.some(light => light.group === nearbySwitch.group && light.on) : false;
+  const switchOn = nearbySwitch ? lightGroupPowered(nearbySwitch.group) : false;
   prompt.innerHTML = activeHidingSpot ? `<b>E</b> ${activeHidingSpot.name}에서 나오기`
     : nearbyTreasure
     ? `<b>E</b> ${nearbyTreasure.name} 훔치기 · ${nearbyTreasure.value.toLocaleString('ko-KR')}`
     : nearbyKeycard ? `<b>E</b> ${nearbyKeycard.name} 획득`
     : nearbyHide ? `<b>E</b> ${nearbyHide.name}에 숨기`
     : nearbyCctvPanel ? `<b>E</b> ${nearbyCctvPanel.name} 비활성화 · 1회용`
-    : nearbySwitch ? `<b>E</b> 구역 조명 ${switchOn ? '끄기' : '켜기'} · 1회용`
+    : nearbySwitch ? nearbySwitch.cooldown > 0
+      ? `조명 제어반 재사용 대기 · ${nearbySwitch.cooldown.toFixed(1)}초`
+      : `<b>E</b> 구역 조명 ${switchOn ? '끄기' : '켜기'} · 경비가 조사할 수 있음`
     : nearbyDoor ? `<b>E</b> ${nearbyDoor.name} ${nearbyDoor.open ? '닫기' : nearbyDoor.locked && !keycard.collected ? '열기 · 키카드 필요' : '열기'}`
     : nearExit ? exitLockdown > 0
       ? `<b>E</b> 출구 봉쇄 중 · ${exitLockdown.toFixed(1)}초`
@@ -1639,6 +1693,29 @@ function alertGuardToDoorNoise(door: Door, radius: number) {
     logPlaytestEvent(`door:heard:${actor.id}:${door.id}`);
   });
   if (reporter && radius >= 300) shareGuardReport(reporter, point);
+}
+
+function alertNearestGuardToLightSwitch(item: LightSwitch, powered: boolean) {
+  const radius = powered ? BALANCE.lighting.guardInvestigationRadiusOn : BALANCE.lighting.guardInvestigationRadiusOff;
+  const candidate = [guard, supportGuard]
+    .filter(actor => actor.state !== 'CHASE' && actor.state !== 'HIDE_CHECK' && distance(actor, item) <= radius)
+    .sort((a, b) => distance(a, item) - distance(b, item))[0];
+  if (!candidate) return;
+
+  candidate.lastSeen = { x: item.x, y: item.y };
+  candidate.repathTimer = 0;
+  lightSwitchInvestigations++;
+  const reason = powered ? '조명 복구 확인' : '정전 구역 조사';
+  if (candidate.id === guard.id) {
+    detection = Math.max(detection, .24);
+    if (guard.state === 'INVESTIGATE') showGuardFeedback(guard, reason, 'notice');
+    else setGuardState('INVESTIGATE', reason);
+  } else {
+    supportDetection = Math.max(supportDetection, .22);
+    if (supportGuard.state === 'INVESTIGATE') showGuardFeedback(supportGuard, reason, 'notice');
+    else setSupportGuardState('INVESTIGATE', reason);
+  }
+  logPlaytestEvent(`light:investigate:${candidate.id}:${item.group}`);
 }
 
 function useDoor(door: Door) {
@@ -1718,19 +1795,20 @@ function interact() {
       }
       return;
     }
-    const nearbySwitch = lightSwitches.find(item => !item.used && distance(player, item) < 48);
+    const nearbySwitch = lightSwitches.find(item => distance(player, item) < 48);
     if (nearbySwitch) {
+      if (nearbySwitch.cooldown > 0) {
+        stateFlash = Math.max(stateFlash, .08);
+        logPlaytestEvent(`light:cooldown:${nearbySwitch.group}`);
+        return;
+      }
       const groupLights = lightSources.filter(light => light.group === nearbySwitch.group);
-      const powered = !groupLights.some(light => light.on);
+      const powered = !lightGroupPowered(nearbySwitch.group);
       groupLights.forEach(light => { light.on = powered; });
-      nearbySwitch.used = true; switchesUsed++; shake = 3;
+      nearbySwitch.cooldown = BALANCE.lighting.switchCooldown; switchesUsed++; shake = 3;
       logPlaytestEvent(`light:${nearbySwitch.group}:${powered ? 'on' : 'off'}`);
       audio.switchClick(powered);
-      if (guard.state !== 'CHASE') {
-        guard.lastSeen = { x: nearbySwitch.x, y: nearbySwitch.y };
-        detection = Math.max(detection, .34);
-        setGuardState('INVESTIGATE', '조명 변화 감지');
-      }
+      alertNearestGuardToLightSwitch(nearbySwitch, powered);
     } else {
       const nearbyDoor = doors.find(item => distance(player, doorCenter(item)) < 62);
       if (nearbyDoor) useDoor(nearbyDoor);
@@ -1913,16 +1991,17 @@ function drawLighting() {
 
 function drawLightSwitches() {
   lightSwitches.forEach(item => {
-    const groupOn = lightSources.some(light => light.group === item.group && light.on);
+    const groupOn = lightGroupPowered(item.group);
+    const coolingDown = item.cooldown > 0;
     ctx.save(); ctx.translate(item.x, item.y);
     ctx.fillStyle = 'rgba(0,0,0,.48)'; ctx.beginPath(); ctx.ellipse(3, 11, 15, 7, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#263134'; ctx.fillRect(-11, -13, 22, 28);
-    ctx.fillStyle = item.used ? '#3d4647' : '#657477'; ctx.strokeStyle = '#859391'; ctx.lineWidth = 1;
+    ctx.fillStyle = coolingDown ? '#485254' : '#657477'; ctx.strokeStyle = '#859391'; ctx.lineWidth = 1;
     ctx.fillRect(-10, -15, 20, 25); ctx.strokeRect(-9.5, -14.5, 19, 24);
     ctx.fillStyle = '#172022'; ctx.fillRect(-6, -10, 12, 8);
     ctx.fillStyle = groupOn ? '#82cfad' : '#d17d62'; ctx.shadowColor = groupOn ? '#82cfad' : '#d17d62'; ctx.shadowBlur = 6;
     ctx.beginPath(); ctx.arc(0, -6, 2.5, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
-    ctx.font = '600 5px "IBM Plex Mono"'; ctx.textAlign = 'center'; ctx.fillStyle = '#aeb9b5'; ctx.fillText('LIGHT', 0, 6); ctx.restore();
+    ctx.font = '600 5px "IBM Plex Mono"'; ctx.textAlign = 'center'; ctx.fillStyle = '#aeb9b5'; ctx.fillText(groupOn ? 'LIGHT' : 'DARK', 0, 6); ctx.restore();
   });
 }
 
@@ -2026,7 +2105,8 @@ function drawGuardVision() {
 
 function drawActorVision(actor: GuardActor) {
   const rays = 32;
-  const range = (actor.state === 'CHASE' ? 465 : 390) + alertLevel * 18 + Math.sin(visualTime * 7.3) * 3;
+  const darkZoneMultiplier = isControlledZoneDark(actor) ? BALANCE.guard.darkZoneVisualRangeMultiplier : 1;
+  const range = ((actor.state === 'CHASE' ? BALANCE.guard.chaseVision : BALANCE.guard.patrolVision) + alertLevel * 18) * darkZoneMultiplier + Math.sin(visualTime * 7.3) * 3;
   const spread = actor.state === 'CHASE' ? 1.64 : actor.state === 'SEARCH' || actor.state === 'HIDE_CHECK' ? 1.36 : 1.12;
   ctx.beginPath(); ctx.moveTo(actor.x, actor.y);
   for (let i = 0; i <= rays; i++) {
@@ -2121,9 +2201,9 @@ function drawTreasures() {
 function drawPlayer() {
   if (activeHidingSpot) return;
   const speed = Math.min(1, Math.hypot(player.vx, player.vy) / 180);
-  const careful = keys.has('shift');
+  const running = keys.has('shift');
   const crouching = keys.has('c');
-  const gait = Math.sin(visualTime * (crouching ? 5.5 : careful ? 7 : 12)) * (crouching ? 3 : 5) * speed;
+  const gait = Math.sin(visualTime * (crouching ? 5.5 : running ? 12 : 7)) * (crouching ? 3 : running ? 5 : 4) * speed;
   const moving = playerMotion.moving;
   ctx.save(); ctx.translate(player.x, player.y);
   if (crouching) ctx.scale(1, .72);
@@ -2132,7 +2212,7 @@ function drawPlayer() {
   if (isCharacterReady(characterAssets.playerWalk)) {
     const walkFrame = moving ? Math.floor(playerMotion.phase) % characterAssets.playerWalk.columns : 0;
     ctx.shadowColor = crouching ? 'rgba(108,196,178,.45)' : 'rgba(108,196,178,.72)';
-    ctx.shadowBlur = crouching ? 7 : careful ? 10 : 14;
+    ctx.shadowBlur = crouching ? 7 : running ? 14 : 10;
     drawCharacterFrame(ctx, characterAssets.playerWalk, playerMotion.direction, walkFrame, {
       x: -41, y: -68, width: 82, height: 82,
     });
@@ -2149,7 +2229,7 @@ function drawPlayer() {
     ctx.translate(0, gait * .18 - speed * 1.2);
     if (Math.cos(player.facing) < 0) ctx.scale(-1, 1);
     ctx.shadowColor = crouching ? 'rgba(108,196,178,.45)' : 'rgba(108,196,178,.72)';
-    ctx.shadowBlur = crouching ? 7 : careful ? 10 : 14;
+    ctx.shadowBlur = crouching ? 7 : running ? 14 : 10;
     ctx.drawImage(characterAssets.player.image, -34, -61, 68, 68);
     ctx.shadowBlur = 0;
     ctx.restore();
@@ -2159,7 +2239,7 @@ function drawPlayer() {
   ctx.rotate(player.facing);
   ctx.strokeStyle = '#33534f'; ctx.lineWidth = 5; ctx.lineCap = 'round';
   ctx.beginPath(); ctx.moveTo(-5, -5); ctx.lineTo(-11 - Math.abs(gait) * .35, -6 + gait); ctx.moveTo(-5, 5); ctx.lineTo(-11 - Math.abs(gait) * .35, 6 - gait); ctx.stroke();
-  ctx.shadowColor = '#6cc4b2'; ctx.shadowBlur = crouching ? 7 : 14; ctx.fillStyle = crouching ? '#6e9c93' : careful ? '#88b9ae' : '#abd8ce';
+  ctx.shadowColor = '#6cc4b2'; ctx.shadowBlur = crouching ? 7 : running ? 14 : 10; ctx.fillStyle = crouching ? '#6e9c93' : running ? '#abd8ce' : '#88b9ae';
   ctx.beginPath(); ctx.roundRect(-10, -10, 21, 20, 8); ctx.fill();
   ctx.shadowBlur = 0; ctx.fillStyle = '#d7eee8'; ctx.beginPath(); ctx.arc(8, 0, 6, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = '#315b55'; ctx.beginPath(); ctx.moveTo(12, 0); ctx.lineTo(3, -3); ctx.lineTo(3, 3); ctx.closePath(); ctx.fill();
@@ -2174,8 +2254,8 @@ function drawNoisePulses() {
     const progress = pulse.age / pulse.duration;
     const radius = pulse.radius * (.12 + progress * .88);
     ctx.save();
-    const subtle = pulse.mode !== 'normal';
-    const color = pulse.mode === 'crouch' ? '104,151,143' : pulse.mode === 'careful' ? '112,190,169' : '220,178,92';
+    const subtle = pulse.mode !== 'run';
+    const color = pulse.mode === 'crouch' ? '104,151,143' : pulse.mode === 'walk' ? '112,190,169' : '220,178,92';
     ctx.strokeStyle = `rgba(${color},${(1 - progress) * (pulse.mode === 'crouch' ? .08 : subtle ? .12 : .18)})`;
     ctx.lineWidth = subtle ? 1 : 1.5;
     ctx.setLineDash(subtle ? [3, 8] : [5, 7]);
