@@ -24,6 +24,7 @@ export type CctvPanel = {
   cameraId: string;
   x: number;
   y: number;
+  wallSide: 'left' | 'right';
   used: boolean;
 };
 
@@ -34,7 +35,7 @@ export const cctvCameras: CctvCamera[] = [
 ];
 
 export const cctvPanels: CctvPanel[] = [
-  { id: 'central-panel', name: '중앙 CCTV 제어반', cameraId: 'central-cam', x: 950, y: 335, used: false },
-  { id: 'crown-panel', name: '왕관실 CCTV 제어반', cameraId: 'crown-cam', x: 1450, y: 420, used: false },
-  { id: 'exit-panel', name: '출구 CCTV 제어반', cameraId: 'exit-cam', x: 395, y: 690, used: false },
+  { id: 'central-panel', name: '중앙 CCTV 제어반', cameraId: 'central-cam', x: 694, y: 350, wallSide: 'left', used: false },
+  { id: 'crown-panel', name: '왕관실 CCTV 제어반', cameraId: 'crown-cam', x: 1414, y: 420, wallSide: 'left', used: false },
+  { id: 'exit-panel', name: '출구 CCTV 제어반', cameraId: 'exit-cam', x: 354, y: 630, wallSide: 'left', used: false },
 ];

@@ -11,7 +11,7 @@
       <canvas id="game" aria-label="Shadow Heist 게임 화면"></canvas>
 
       <section id="hud" aria-live="polite">
-        <div class="brand"><span>SHADOW</span> HEIST <small>PROTOTYPE 14</small></div>
+        <div class="brand"><span>SHADOW</span> HEIST <small>PROTOTYPE 27</small></div>
         <div class="objective">
           <span class="label">OBJECTIVE</span>
           <strong id="objectiveText">보물을 훔치고 살아서 돌아오세요</strong>
@@ -19,10 +19,23 @@
         <div class="status" id="statusBadge"><i></i><span>미탐지</span></div>
       </section>
 
-      <section id="soundMeter" aria-label="가장 가까운 경비원 접근 소리">
-        <span class="sound-label">접근음</span>
-        <div class="bars"><i></i><i></i><i></i><i></i><i></i></div>
-        <span id="soundDirection">·</span>
+      <section id="soundMeter" aria-label="경비원 발소리 청취 안내">
+        <span class="sound-label">LISTEN</span>
+        <span>헤드폰 권장</span>
+      </section>
+
+      <section id="onboarding" class="onboarding hidden" aria-live="polite">
+        <span id="onboardingStep">STEP 1 / 4</span>
+        <strong id="onboardingTitle">어둠 속에서 이동하세요</strong>
+        <p id="onboardingDetail"><b>WASD</b> 또는 방향키로 출구에서 벗어나세요.</p>
+        <div><i></i><i></i><i></i><i></i></div>
+      </section>
+
+      <section id="riskDecision" class="risk-decision hidden" aria-live="assertive">
+        <span>LOOT SECURED</span>
+        <strong id="riskValue">0</strong>
+        <div><b>지금 탈출</b><i>OR</i><b>더 깊이 <em id="riskMultiplier">×1.15</em></b></div>
+        <small>체포되면 이번 강탈 점수를 모두 잃습니다</small>
       </section>
 
       <section id="missionData" aria-label="강탈 현황">
