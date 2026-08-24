@@ -17,8 +17,11 @@
 5. [CCTV](cctv.md)
 6. [문과 출입 권한](doors-and-access.md)
 7. [강탈과 점수](heist-and-scoring.md)
-8. [플레이테스트 도구와 밸런스](playtest-tools.md)
-9. 관심 있는 나머지 분야
+8. [부분 3D 전환](partial-3d.md)
+9. [Babylon.js 3D 기반](babylon-3d-foundation.md)
+10. [3D 플레이어 이동과 탑다운 카메라](player-movement-3d.md)
+11. [플레이테스트 도구와 밸런스](playtest-tools.md)
+12. 관심 있는 나머지 분야
 
 ## 분야별 문서
 
@@ -32,6 +35,9 @@
 | [문과 출입 권한](doors-and-access.md) | 일반 문, 잠금문, 키카드, 문 조작 소음 |
 | [사운드](audio.md) | 경비 접근음, 플레이어 소음, 거리와 방향, 벽 차폐, 효과음, 환경음 |
 | [강탈과 점수](heist-and-scoring.md) | 보물, 선택 탈출, 출구 봉쇄, 경계 단계, 점수 계산 |
+| [부분 3D 전환](partial-3d.md) | 보물 획득 1인칭 장면, E 유지 상호작용, 3D 검증 기준과 성능 원칙 |
+| [Babylon.js 3D 기반](babylon-3d-foundation.md) | 별도 3D 진입점, Babylon 엔진, 장면 구조, GLB 로더, 에셋 폴더와 디버그 |
+| [3D 플레이어 이동과 탑다운 카메라](player-movement-3d.md) | 임시 캡슐, 카메라 기준 WASD, 가감속, 회전, 벽 충돌, 추적 카메라 |
 | [UI와 그래픽](ui-and-visuals.md) | HUD, 시작·결과 화면, 캐릭터, Fake 2.5D |
 | [플레이테스트](playtest.md) | 테스트 질문, 저장 데이터, 확인 목록 |
 | [플레이테스트 도구와 밸런스](playtest-tools.md) | F2 진단 패널, 기록 내보내기, 밸런스 수치 수정 |
@@ -49,6 +55,7 @@
 | AI 상태 | 경비원이 현재 어떤 행동 중인지 나타내는 값 |
 | A* | 벽을 피해 목적지까지 가는 경로를 찾는 방법 |
 | Fake 2.5D | 2D 도형에 옆면과 그림자를 더해 높이가 있어 보이게 하는 방식 |
+| Vertical Slice | 대표 장면 하나를 먼저 완성해 전체 개발 방향을 시험하는 방식 |
 | 로컬 스토리지 | 서버 없이 현재 브라우저에 데이터를 저장하는 공간 |
 | 빌드 | 코드를 브라우저에서 실행 가능한 결과물로 만드는 과정 |
 

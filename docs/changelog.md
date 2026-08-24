@@ -2,6 +2,61 @@
 
 이 문서는 각 프로토타입에서 크게 바뀐 분야만 기록한다. 기능의 상세한 현재 동작은 [개발 문서 목차](README.md)의 담당 문서에서 관리한다.
 
+## Babylon 3D Player — Phase 02
+
+변경 분야:
+
+- `InputManager`, `Player`, `PlayerController`, `GameCamera` 역할 분리
+- 1.76m 임시 캡슐과 방향 표식, CameraTarget, InteractionPoint 구성
+- 카메라 기준 WASD, 대각선 정규화, Delta Time 기반 3.35m/s 이동 구현
+- 짧은 가속·감속과 이동 방향 회전 보간 적용
+- 원형 플레이어와 사각 벽의 축별 슬라이딩 충돌 구현
+- 시작 방, 2.4m 통로, 작은 방, L자 모서리와 상자 테스트 맵 구성
+- 고정 하이앵글 추적 카메라, Follow 보간, 0.72m Look Ahead 구현
+- Near·Medium·Far 거리 비교 키와 속도·위치·방향 디버그 정보 추가
+- 창 포커스와 탭 상태 변경 시 입력 초기화
+- Canvas 포커스 환경에서 WASD가 누락되던 문제를 문서 캡처 입력, 클릭 포커스 복구와 키 값 대체 처리로 수정
+- 디버그 패널에 현재 수신 중인 키를 표시해 입력 문제와 이동 문제를 구분
+- 첫 이동 시 Babylon `Ray` 모듈 미등록으로 카메라 기준 방향 계산이 중단되던 오류 수정
+
+관련 문서:
+
+- [3D 플레이어 이동과 탑다운 카메라](player-movement-3d.md)
+
+## Babylon 3D Foundation — Phase 01
+
+변경 분야:
+
+- 기존 2D 게임과 분리된 `3d.html` Babylon.js 실험 진입점 추가
+- TypeScript 기반 `Game`, `SceneManager`, `AssetManager`, `PrototypeScene` 구조 구축
+- 20m 바닥, 탑다운 카메라, 환경광·방향광, 실시간 그림자 구성
+- glTF 2.0 GLB 로더와 재생성 가능한 시험 모델 파이프라인 추가
+- 로딩 진행 화면, 반응형 캔버스, FPS·카메라·메시 디버그 표시 추가
+- 캐릭터·환경·소품·UI·사운드별 에셋 폴더 규칙 마련
+
+관련 문서:
+
+- [Babylon.js 3D 기반](babylon-3d-foundation.md)
+
+## Prototype 33
+
+변경 분야:
+
+- 보물 상호작용 시 탑다운 화면에서 전시대 앞 1인칭 부분 3D 장면으로 전환
+- `E`를 유지하면 손이 보물로 이동하고 진행도가 완료된 뒤 기존 강탈 상태에 반영
+- 청동 유물, 밤의 보석, 황금 왕관에 서로 다른 입체 실루엣 적용
+- 왕관 확보 장면을 `SECURITY BREACH`와 기존 비상구 추격 흐름에 연결
+- CSS Perspective 기반으로 벽, 바닥, 유리 케이스, 전시대, 스포트라이트와 손을 구성
+- 외부 3D 엔진과 대용량 모델 없이 전환의 재미부터 검증하는 Vertical Slice 적용
+- `ESC` 취소, 모션 감소 환경과 접근성 상태 지원
+- Windows에서 프로젝트 경로와 PowerShell 실행 정책 오류를 피하는 `start-server.cmd` 추가
+- 보물 상호작용 안내에 `3D VIEW`를 표시하고, 플레이 중 `F3` 또는 진단 패널로 안전하게 체험하는 미리보기 추가
+
+관련 문서:
+
+- [부분 3D 전환](partial-3d.md)
+- [강탈과 점수](heist-and-scoring.md)
+
 ## Prototype 32
 
 변경 분야:

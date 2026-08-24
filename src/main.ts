@@ -68,6 +68,13 @@ const devLiveData = document.querySelector<HTMLElement>('#devLiveData')!;
 const recentRuns = document.querySelector<HTMLElement>('#recentRuns')!;
 const debugPathsInput = document.querySelector<HTMLInputElement>('#debugPaths')!;
 const showNoiseWavesInput = document.querySelector<HTMLInputElement>('#showNoiseWaves')!;
+const preview3DButton = document.querySelector<HTMLButtonElement>('#preview3D')!;
+const immersiveTheft = document.querySelector<HTMLElement>('#immersiveTheft')!;
+const theftTargetName = document.querySelector<HTMLElement>('#theftTargetName')!;
+const theftTargetValue = document.querySelector<HTMLElement>('#theftTargetValue')!;
+const theftArtifact = document.querySelector<HTMLElement>('#theftArtifact')!;
+const theftInstruction = document.querySelector<HTMLElement>('#theftInstruction')!;
+const theftProgress = document.querySelector<HTMLElement>('#theftProgress')!;
 
 const VIEW = { w: 1360, h: 765 };
 const WORLD = { w: 1800, h: 1100 };
@@ -231,6 +238,8 @@ let nextReactionCueAt = 0;
 let riskDecisionUntil = 0;
 type GuardFeedback = { text: string; tone: 'notice' | 'warning' | 'danger'; expiresAt: number };
 const guardFeedback = new Map<string, GuardFeedback>();
+type ImmersiveTheftState = { treasure: Treasure; progress: number; completeTimer: number; preview: boolean };
+let immersiveTheftState: ImmersiveTheftState | null = null;
 
 const player = { x: 135, y: 940, vx: 0, vy: 0, facing: -Math.PI / 2 };
 const treasures: Treasure[] = [
@@ -760,6 +769,7 @@ function updateExitLockdown(dt: number, now: number) {
 }
 
 function resetGame() {
+  leaveImmersiveTheft();
   player.x = 135; player.y = 940; player.vx = 0; player.vy = 0; player.facing = -Math.PI / 2;
   guard.x = 530; guard.y = 510; guard.facing = 0; guard.target = 1; guard.state = 'PATROL';
   guard.stateTime = 0; guard.lostSightTime = 0; guard.searchStep = 0;
@@ -870,6 +880,7 @@ function nextHeist() {
 }
 
 function finishGame(won: boolean) {
+  leaveImmersiveTheft();
   state = won ? 'won' : 'caught';
   updateHidingHud();
   onboarding.classList.add('hidden');
@@ -897,7 +908,7 @@ function finishGame(won: boolean) {
 
 function savePlaytestRun(won: boolean) {
   const run = {
-    version: 'prototype-30',
+    version: 'prototype-33',
     heistId: currentHeist().id,
     heistIndex: currentHeistIndex + 1,
     finalEscapeActive,
@@ -1555,6 +1566,7 @@ function updateSupportGuard(dt: number) {
 
 function update(dt: number, now: number) {
   if (state !== 'playing') return;
+  if (immersiveTheftState) { updateImmersiveTheft(dt); return; }
   playerMotion.moving = false;
   guardMotions.forEach(motion => { motion.moving = false; });
   elapsed += dt;
@@ -1738,7 +1750,7 @@ function update(dt: number, now: number) {
   prompt.classList.toggle('hidden', !nearbyTreasure && !nearbyKeycard && !nearbyHide && !nearbyCctvPanel && !nearbyDoor && !nearExit);
   prompt.innerHTML = activeHidingSpot ? `<b>E</b> 나오기${guard.suspectedHideId === activeHidingSpot.id || hidingThreat().distance < 210 ? '<small>위험</small>' : ''}`
     : nearbyTreasure
-    ? `<b>E</b> ${nearbyTreasure.name} 훔치기 · ${nearbyTreasure.value.toLocaleString('ko-KR')}`
+    ? `<b>E</b> 3D VIEW · ${nearbyTreasure.name} 훔치기 · ${nearbyTreasure.value.toLocaleString('ko-KR')}`
     : nearbyKeycard ? `<b>E</b> ${nearbyKeycard.name} 획득`
     : nearbyHide ? `<b>E</b> ${nearbyHide.name}에 숨기`
     : nearbyCctvPanel ? `<b>E</b> ${nearbyCctvPanel.name} 비활성화 · 1회용`
@@ -1846,36 +1858,95 @@ function useDoor(door: Door) {
   logPlaytestEvent(`door:${door.open ? 'open' : 'close'}:${door.id}`);
 }
 
+function leaveImmersiveTheft() {
+  immersiveTheftState = null;
+  immersiveTheft.classList.remove('active', 'stealing', 'complete', 'breach');
+  immersiveTheft.setAttribute('aria-hidden', 'true');
+  app.classList.remove('is-immersive-theft');
+  theftProgress.style.width = '0%';
+  keys.delete('e');
+}
+
+function enterImmersiveTheft(treasure: Treasure, preview = false) {
+  immersiveTheftState = { treasure, progress: 0, completeTimer: 0, preview };
+  theftTargetName.textContent = treasure.id === 'crown' ? 'THE GOLDEN CROWN' : treasure.name;
+  theftTargetValue.textContent = preview ? `3D PREVIEW · ${treasure.value.toLocaleString('ko-KR')} TAKE` : `${treasure.value.toLocaleString('ko-KR')} TAKE`;
+  theftArtifact.className = `theft-artifact ${treasure.id}`;
+  theftInstruction.textContent = 'E를 길게 눌러 훔치기';
+  theftProgress.style.width = '0%';
+  immersiveTheft.classList.remove('stealing', 'complete', 'breach');
+  immersiveTheft.classList.add('active');
+  immersiveTheft.setAttribute('aria-hidden', 'false');
+  app.classList.add('is-immersive-theft');
+  player.vx = 0; player.vy = 0;
+  logPlaytestEvent(`immersive:enter:${treasure.id}`);
+}
+
+function updateImmersiveTheft(dt: number) {
+  const view = immersiveTheftState;
+  if (!view) return;
+  const holding = keys.has('e') && view.completeTimer === 0;
+  const holdDuration = view.treasure.id === 'crown' ? 1.35 : 1.0;
+  view.progress = Math.max(0, Math.min(1, view.progress + dt * (holding ? 1 / holdDuration : -.7)));
+  immersiveTheft.classList.toggle('stealing', holding || view.completeTimer > 0);
+  theftProgress.style.width = `${Math.round(view.progress * 100)}%`;
+
+  if (view.progress >= 1 && view.completeTimer === 0) {
+    view.completeTimer = .72;
+    theftInstruction.textContent = view.preview ? 'PREVIEW COMPLETE' : view.treasure.id === 'crown' ? 'SECURITY BREACH' : 'ARTIFACT SECURED';
+    immersiveTheft.classList.add('complete');
+    if (view.treasure.id === 'crown') immersiveTheft.classList.add('breach');
+    stateFlash = Math.max(stateFlash, .55);
+    shake = Math.max(shake, 5);
+    audio.sting(true);
+    logPlaytestEvent(`immersive:secured:${view.treasure.id}`);
+  }
+
+  if (view.completeTimer > 0) {
+    view.completeTimer -= dt;
+    if (view.completeTimer <= 0) {
+      const treasure = view.treasure;
+      leaveImmersiveTheft();
+      if (!view.preview) collectTreasure(treasure);
+    }
+  }
+}
+
+function collectTreasure(treasure: Treasure) {
+  const firstLoot = firstTreasureAt < 0;
+  treasure.collected = true;
+  treasureTaken = true;
+  if (firstTreasureAt < 0) {
+    firstTreasureAt = elapsed;
+    logPlaytestEvent('tension:first-treasure');
+  }
+  lootScore += treasure.value;
+  const collectedCount = collectedTreasureCount();
+  alertLevel = Math.max(alertLevel, collectedCount);
+  const allCollected = collectedCount === activeTreasures().length;
+  objectiveText.textContent = allCollected ? '모든 보물 확보 — 출구로 탈출하세요' : '탈출하거나, 더 깊이 들어가세요';
+  updateMissionHud(); shake = 7 + alertLevel * 2; stateFlash = Math.max(stateFlash, .42);
+  if (firstLoot) showRiskDecision();
+  logPlaytestEvent(`treasure:${treasure.id}`);
+  if (guard.state !== 'CHASE') {
+    guard.lastSeen = { x: treasure.x, y: treasure.y };
+    detection = Math.max(detection, .28 + alertLevel * .12);
+    guard.target = alertLevel === 3 ? 10 : (guard.target + 3) % patrol.length;
+    setGuardState('INVESTIGATE', '보물 경보 수신');
+  }
+  shareGuardReport(null, treasure);
+  if (treasure.id === 'crown' && currentHeist().crownEscape) triggerCrownEscape();
+  else if (allCollected && currentHeistIndex > 0) triggerExitLockdown('final-loot');
+  if (audio.context && audio.master) audio.sting(true);
+}
+
 function interact() {
   if (state !== 'playing') return;
+  if (immersiveTheftState) return;
   if (activeHidingSpot) { exitHiding(); return; }
   const nearbyTreasure = activeTreasures().find(item => !item.collected && distance(player, item) < 52);
   if (nearbyTreasure) {
-    const firstLoot = firstTreasureAt < 0;
-    nearbyTreasure.collected = true;
-    treasureTaken = true;
-    if (firstTreasureAt < 0) {
-      firstTreasureAt = elapsed;
-      logPlaytestEvent('tension:first-treasure');
-    }
-    lootScore += nearbyTreasure.value;
-    const collectedCount = collectedTreasureCount();
-    alertLevel = Math.max(alertLevel, collectedCount);
-    const allCollected = collectedCount === activeTreasures().length;
-    objectiveText.textContent = allCollected ? '모든 보물 확보 — 출구로 탈출하세요' : '탈출하거나, 더 깊이 들어가세요';
-    updateMissionHud(); shake = 7 + alertLevel * 2; stateFlash = Math.max(stateFlash, .42);
-    if (firstLoot) showRiskDecision();
-    logPlaytestEvent(`treasure:${nearbyTreasure.id}`);
-    if (guard.state !== 'CHASE') {
-      guard.lastSeen = { x: nearbyTreasure.x, y: nearbyTreasure.y };
-      detection = Math.max(detection, .28 + alertLevel * .12);
-      guard.target = alertLevel === 3 ? 10 : (guard.target + 3) % patrol.length;
-      setGuardState('INVESTIGATE', '보물 경보 수신');
-    }
-    shareGuardReport(null, nearbyTreasure);
-    if (nearbyTreasure.id === 'crown' && currentHeist().crownEscape) triggerCrownEscape();
-    else if (allCollected && currentHeistIndex > 0) triggerExitLockdown('final-loot');
-    if (audio.context && audio.master) audio.sting(true);
+    enterImmersiveTheft(nearbyTreasure);
   } else {
     if (currentHeistIndex === 2 && !keycard.collected && distance(player, keycard) < 48) {
       keycard.collected = true; accessText.textContent = '키카드'; audio.door('keycard'); shake = 2;
@@ -2660,6 +2731,19 @@ function frame(now: number) {
 
 addEventListener('keydown', e => {
   if (e.key === 'F2') { e.preventDefault(); toggleDevPanel(); return; }
+  if (e.key === 'F3') {
+    e.preventDefault();
+    if (state === 'playing' && !immersiveTheftState) {
+      const previewTreasure = activeTreasures().find(item => !item.collected) ?? activeTreasures()[0];
+      if (previewTreasure) enterImmersiveTheft(previewTreasure, true);
+    }
+    return;
+  }
+  if (e.key === 'Escape' && immersiveTheftState && immersiveTheftState.completeTimer === 0) {
+    logPlaytestEvent(`immersive:cancel:${immersiveTheftState.treasure.id}`);
+    leaveImmersiveTheft();
+    return;
+  }
   keys.add(e.key.toLowerCase());
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
   if (e.key.toLowerCase() === 'e' && !e.repeat) interact();
@@ -2676,6 +2760,11 @@ document.querySelector('#clearRuns')!.addEventListener('click', () => {
 });
 debugPathsInput.addEventListener('change', () => { debugPaths = debugPathsInput.checked; });
 showNoiseWavesInput.addEventListener('change', () => { showNoiseWaves = showNoiseWavesInput.checked; });
+preview3DButton.addEventListener('click', () => {
+  if (state !== 'playing' || immersiveTheftState) return;
+  const previewTreasure = activeTreasures().find(item => !item.collected) ?? activeTreasures()[0];
+  if (previewTreasure) enterImmersiveTheft(previewTreasure, true);
+});
 
 validateCctvCoverage();
 updateStartHeistScreen();

@@ -1,0 +1,26 @@
+:root { color-scheme: dark; font-family: "IBM Plex Mono", Consolas, monospace; background: #0d1214; }
+* { box-sizing: border-box; }
+html, body, #prototype3D { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+body { background: #0d1214; }
+#renderCanvas { display: block; width: 100vw; height: 100vh; outline: none; touch-action: none; }
+.loading-3d { position: fixed; inset: 0; z-index: 20; display: grid; place-content: center; justify-items: center; gap: 11px; background: #0b1012; color: #dce7e4; transition: opacity .38s ease, visibility .38s; }
+.loading-3d.complete { opacity: 0; visibility: hidden; pointer-events: none; }
+.loading-3d.failed { color: #f18a76; }
+.loading-3d span { color: #c9a855; font-size: 11px; letter-spacing: .35em; }
+.loading-3d strong { font: 600 18px system-ui, sans-serif; letter-spacing: .08em; }
+.loading-3d div { width: min(360px, 70vw); height: 3px; margin-top: 7px; background: #1b2728; }
+.loading-3d i { display: block; width: 0; height: 100%; background: linear-gradient(90deg, #58ab9c, #d3b258); box-shadow: 0 0 12px #58ab9c; transition: width .18s ease; }
+.loading-3d small { color: #677977; font-size: 9px; letter-spacing: .18em; }
+.prototype-3d-header { position: fixed; left: 26px; top: 23px; display: grid; gap: 6px; text-shadow: 0 2px 10px #000; pointer-events: none; }
+.prototype-3d-header span { color: #c4a451; font-size: 9px; letter-spacing: .24em; }
+.prototype-3d-header strong { color: #e1ebe8; font: 600 15px system-ui, sans-serif; letter-spacing: .1em; }
+.debug-3d { position: fixed; right: 24px; top: 23px; min-width: 255px; display: grid; gap: 5px; padding: 12px 14px; border: 1px solid rgba(106,143,136,.25); background: rgba(7,12,13,.72); backdrop-filter: blur(8px); }
+.debug-3d span { color: #5db6a5; font-size: 8px; letter-spacing: .28em; }
+.debug-3d b { color: #dbe9e5; font-size: 15px; }
+.debug-3d small { color: #758986; font-size: 8px; letter-spacing: .06em; }
+.prototype-3d-guide { position: fixed; left: 50%; bottom: 25px; display: flex; gap: 12px; align-items: center; transform: translateX(-50%); color: #82928f; font-size: 9px; }
+.prototype-3d-guide span { color: #d6b55e; font-weight: 700; letter-spacing: .12em; }
+.back-to-game { position: fixed; left: 25px; bottom: 23px; padding: 9px 11px; border: 1px solid rgba(113,139,134,.28); color: #9db0ac; background: rgba(8,13,14,.68); font-size: 9px; letter-spacing: .1em; text-decoration: none; }
+.back-to-game:hover { color: #d8e5e2; border-color: rgba(117,188,173,.6); }
+@media (max-width: 720px) { .prototype-3d-guide { display: none; }.debug-3d { right: 12px; top: 12px; transform: scale(.86); transform-origin: top right; }.prototype-3d-header { left: 14px; top: 14px; }.prototype-3d-header strong { max-width: 170px; } }
+@media (prefers-reduced-motion: reduce) { .loading-3d, .loading-3d i { transition: none; } }

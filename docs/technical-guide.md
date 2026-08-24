@@ -13,6 +13,7 @@
 | Vite | 개발 서버 실행과 배포 파일 생성 |
 | TypeScript | 코드의 자료형을 검사해 실수 방지 |
 | HTML5 Canvas | 맵, 캐릭터, 조명, 시야 그리기 |
+| Babylon.js | 별도 3D 장면, 카메라, 조명, 그림자와 GLB 모델 로딩 |
 | CSS | 메뉴와 HUD 모양 |
 | Web Audio API | 발소리, 효과음, 환경음 생성 |
 
@@ -38,6 +39,31 @@ npm run dev
 
 터미널에 표시된 `http://localhost:...` 주소를 브라우저에서 열면 게임을 실행할 수 있다.
 
+### Windows에서 가장 간단하게 실행하기
+
+프로젝트 루트의 `start-server.cmd`를 더블클릭한다. 이 실행 파일은 다음 작업을 자동으로 처리한다.
+
+1. 현재 터미널 위치와 관계없이 프로젝트 폴더로 이동한다.
+2. Node.js가 설치되어 있는지 확인한다.
+3. Vite가 설치되어 있는지 확인한다.
+4. PowerShell 실행 정책의 영향을 받지 않는 `npm.cmd run dev`를 실행한다.
+
+`Project dependencies are not installed`가 표시되면 프로젝트 폴더에서 다음 명령을 한 번 실행한다.
+
+```powershell
+npm.cmd install
+```
+
+PowerShell에서 `npm.ps1` 또는 `npx.ps1`을 실행할 수 없다는 오류가 발생하면 실행 정책을 바꾸지 않아도 된다. 명령에서 `npm` 대신 `npm.cmd`, `npx` 대신 `npx.cmd`를 사용하면 된다.
+
+### 서버가 실행되지 않을 때 확인 순서
+
+1. 터미널의 현재 경로가 `SHADOW-HEIST_V2`인지 확인한다.
+2. `node --version`이 정상적으로 버전을 출력하는지 확인한다.
+3. `node_modules/.bin/vite.cmd`가 존재하는지 확인한다.
+4. 다른 서버가 5173 포트를 사용 중이면 Vite가 표시한 다른 포트 주소를 연다.
+5. 서버가 실행되면 브라우저에서 `http://localhost:5173/`에 접속한다.
+
 ## 빌드 검사
 
 ```bash
@@ -59,6 +85,7 @@ npm run build
 ```text
 SHADOW-HEIST_V2/
 ├─ index.html
+├─ 3d.html
 ├─ package.json
 ├─ tsconfig.json
 ├─ src/
@@ -72,11 +99,26 @@ SHADOW-HEIST_V2/
 │  ├─ noise.ts
 │  ├─ security.ts
 │  ├─ vision.ts
-│  └─ style.css
+│  ├─ style.css
+│  └─ 3d/
+│     ├─ config/gameConfig.ts
+│     ├─ core/Game.ts
+│     ├─ core/SceneManager.ts
+│     ├─ core/AssetManager.ts
+│     ├─ systems/InputManager.ts
+│     ├─ entities/player/Player.ts
+│     ├─ entities/player/PlayerController.ts
+│     ├─ camera/GameCamera.ts
+│     └─ scenes/PrototypeScene.ts
+├─ public/
+│  ├─ models/
+│  ├─ textures/
+│  └─ audio/
 └─ docs/
 ```
 
 - `index.html`: Canvas, 시작 화면, HUD, 결과 화면의 HTML 구조
+- `3d.html`: 기존 2D 게임과 분리된 Babylon.js 3D 실험 화면
 - `src/main.ts`: 게임 상태, 이동, AI, 시야, 조명, 사운드, 렌더링
 - `src/balance.ts`: 플레이어, 소음, 경비, CCTV, 점수, 봉쇄의 주요 조정 수치
 - `src/cctv.ts`: CCTV와 제어반의 종류, 위치, 초기 상태
@@ -88,9 +130,13 @@ SHADOW-HEIST_V2/
 - `src/security.ts`: CCTV와 마지막 보물 조건에 따른 출구 봉쇄 시간 계산
 - `src/vision.ts`: 경비, 플레이어, 조명, CCTV가 함께 사용하는 LOS와 광선 계산
 - `src/style.css`: 메뉴와 HUD 디자인
+- `src/3d/`: 3D 엔진, 장면 관리, GLB 로딩, 설정과 3D 전용 UI
 - `package.json`: 실행 명령과 개발 도구 목록
+- `start-server.cmd`: Windows에서 프로젝트 위치와 PowerShell 실행 정책 문제를 피하는 서버 실행 파일
 - `tsconfig.json`: TypeScript 검사 설정
 - `docs/`: 분야별 개발 문서
+
+3D 구조의 자세한 설명과 실행 방법은 [Babylon.js 3D 기반](babylon-3d-foundation.md)에서 확인한다.
 
 ## 현재 구조의 특징
 

@@ -11,7 +11,7 @@
       <canvas id="game" aria-label="Shadow Heist 게임 화면"></canvas>
 
       <section id="hud" aria-live="polite">
-        <div class="brand"><span>SHADOW</span> HEIST <small>PROTOTYPE 32</small></div>
+        <div class="brand"><span>SHADOW</span> HEIST <small>PROTOTYPE 33</small></div>
         <div class="objective">
           <span class="label">OBJECTIVE</span>
           <strong id="objectiveText">보물을 훔치고 살아서 돌아오세요</strong>
@@ -52,6 +52,31 @@
       <div id="cameraWarning" class="camera-warning hidden"><span>CAMERA</span><b id="cameraDetection">0%</b></div>
       <div id="securityWarning" class="security-warning hidden"><span>EXIT LOCKDOWN</span><b id="lockdownTime">0.0s</b></div>
 
+      <section id="immersiveTheft" class="immersive-theft" aria-hidden="true" aria-label="보물 확보 3D 장면">
+        <div class="theft-room" aria-hidden="true">
+          <div class="theft-ceiling"></div>
+          <div class="theft-wall theft-wall-left"></div>
+          <div class="theft-wall theft-wall-right"></div>
+          <div class="theft-floor"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="theft-light-cone"></div>
+          <div class="theft-pedestal">
+            <div class="theft-glass"></div>
+            <div id="theftArtifact" class="theft-artifact crown" aria-hidden="true"><i></i><i></i><i></i><b></b></div>
+          </div>
+          <div class="theft-hand"><i></i><b></b></div>
+        </div>
+        <header class="theft-header">
+          <span>IMMERSIVE HEIST VIEW</span>
+          <strong id="theftTargetName">THE GOLDEN CROWN</strong>
+          <small id="theftTargetValue">₩3,200,000</small>
+        </header>
+        <div class="theft-instruction">
+          <span id="theftInstruction">E를 길게 눌러 훔치기</span>
+          <div class="theft-progress"><i id="theftProgress"></i></div>
+          <small>놓으면 중단 · ESC 돌아가기</small>
+        </div>
+      </section>
+
       <aside id="devPanel" class="dev-panel" aria-hidden="true">
         <header><div><span>PLAYTEST TOOLS</span><strong>실시간 진단</strong></div><button id="closeDevPanel" type="button">×</button></header>
         <pre id="devLiveData"></pre>
@@ -59,6 +84,7 @@
           <label><input id="debugPaths" type="checkbox"> 경비 이동 경로 표시</label>
           <label><input id="showNoiseWaves" type="checkbox" checked> 플레이어 소음 파동 표시</label>
         </div>
+        <button id="preview3D" class="dev-preview-button" type="button">F3 · 부분 3D 획득 장면 미리보기</button>
         <h3>최근 플레이 기록</h3>
         <div id="recentRuns" class="recent-runs"></div>
         <footer><button id="exportRuns" type="button">JSON 내보내기</button><button id="clearRuns" type="button">기록 초기화</button></footer>
@@ -71,6 +97,7 @@
         <p id="startHeistDescription">첫 임무입니다. 경비 한 명의 시야를 피해 유물을 챙겨 입구로 돌아오세요.</p>
         <button id="startButton">잠입 시작 <span>→</span></button>
         <div class="controls"><b>WASD / 방향키</b> 저소음 이동 <b>SHIFT</b> 달리기·큰 소음 <b>C</b> 웅크리기 <b>E</b> 상호작용</div>
+        <a class="engine-lab-link" href="./3d.html">BABYLON 3D PLAYER LAB →</a>
       </section>
 
       <section id="resultScreen" class="screen">
