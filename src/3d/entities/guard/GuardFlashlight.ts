@@ -25,19 +25,27 @@ export class GuardFlashlight {
     this.shadowGenerator = new ShadowGenerator(config.shadowMapSize, this.light);
     this.shadowGenerator.usePercentageCloserFiltering = true;
     this.shadowGenerator.filteringQuality = ShadowGenerator.QUALITY_LOW;
-    this.shadowGenerator.bias = .0008;
-    this.shadowGenerator.normalBias = .025;
+    // Smaller offsets reduce visible light leaking around thick Crown Hall
+    // walls while keeping the low-cost 512px shadow map.
+    this.shadowGenerator.bias = .0004;
+    this.shadowGenerator.normalBias = .012;
   }
 
   setShadowCasters(meshes: AbstractMesh[]) {
     meshes.forEach(mesh => this.shadowGenerator.addShadowCaster(mesh));
   }
 
-  update(deltaTime: number, moving: boolean) {
+  update(deltaTime: number, moving: boolean, alert = false) {
     this.elapsed += deltaTime;
-    const amount = moving ? 1 : .35;
+    const amount = (moving ? 1 : .35) * (alert ? GUARD_CONFIG.flashlight.alertSwayMultiplier : 1);
     this.guard.flashlightPivot.rotation.x = Math.sin(this.elapsed * 6.7) * GUARD_CONFIG.flashlight.swayVertical * amount;
     this.guard.flashlightPivot.rotation.y = Math.sin(this.elapsed * 4.1) * GUARD_CONFIG.flashlight.swayHorizontal * amount;
+  }
+
+
+  reset() {
+    this.elapsed = 0;
+    this.guard.flashlightPivot.rotation.setAll(0);
   }
 
   get worldDirection() {

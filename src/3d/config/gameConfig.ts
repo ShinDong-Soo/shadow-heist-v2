@@ -32,11 +32,20 @@ export const GAME_3D_CONFIG = {
     acceleration: 15,
     deceleration: 21,
     rotationSharpness: 18,
-    start: [0, 0, -6.5] as const,
+    // The player begins outside Crown Hall so the entrance, objective and
+    // guard route can be read before committing to the room.
+    start: [0, 0, -8.15] as const,
+  },
+  performance: {
+    // 1.15 renders roughly 87% of the CSS resolution on each axis, then lets
+    // the browser upscale it to 1080p. This saves pixel work with a small
+    // quality tradeoff suitable for the web submission build.
+    hardwareScalingLevel: 1.15,
+    sampleWindowSeconds: 2,
   },
   scene: {
     groundSize: 22,
-    shadowMapSize: 1024,
+    shadowMapSize: 512,
     clearColor: [0.075, 0.105, 0.115, 1] as const,
   },
 } as const;

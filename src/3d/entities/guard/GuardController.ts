@@ -1,6 +1,7 @@
 import { Scalar } from '@babylonjs/core/Maths/math.scalar';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { GUARD_CONFIG } from '../../config/guardConfig';
+import { CROWN_HALL_CONFIG } from '../../config/crownHallConfig';
 import { GUARD_VISION_CONFIG } from '../../config/guardVisionConfig';
 import { moveCircleWithSliding, type CollisionBox } from '../../systems/CollisionWorld';
 import type { DetectionState } from '../../systems/DetectionSystem';
@@ -9,13 +10,15 @@ import type { GuardFlashlight } from './GuardFlashlight';
 import type { GuardPatrol } from './GuardPatrol';
 
 export type GuardPatrolState = 'IDLE' | 'TURN' | 'PATROL';
-export type GuardState = GuardPatrolState | 'SUSPICIOUS' | 'DETECTED';
+export type GuardState = GuardPatrolState | 'ALERT' | 'SUSPICIOUS' | 'DETECTED';
 
 export class GuardController {
   private patrolState: GuardPatrolState = 'PATROL';
   private awarenessState: DetectionState = 'CLEAR';
   private awarenessTarget: Vector3 | null = null;
   private pauseRemaining = 0;
+  private debugFrozen = false;
+  private alertMode = false;
   private readonly forward = new Vector3(0, 0, 1);
 
   constructor(
@@ -31,17 +34,52 @@ export class GuardController {
   }
 
   update(deltaTime: number) {
+    if (this.debugFrozen) {
+      this.flashlight.update(deltaTime, false);
+      return;
+    }
     if (this.awarenessState !== 'CLEAR' && this.awarenessTarget) this.updateAwarenessTurn(deltaTime);
     else if (this.patrolState === 'IDLE') this.updateIdle(deltaTime);
     else if (this.patrolState === 'TURN') this.updateTurn(deltaTime);
     else this.updatePatrol(deltaTime);
 
-    this.flashlight.update(deltaTime, this.state === 'PATROL');
+    this.flashlight.update(deltaTime, this.state === 'PATROL' || this.state === 'ALERT', this.alertMode);
   }
 
   setAwareness(state: DetectionState, target: Vector3) {
     this.awarenessState = state;
     this.awarenessTarget = state === 'CLEAR' ? null : target.clone();
+  }
+
+  setDebugFrozen(frozen: boolean) {
+    this.debugFrozen = frozen;
+  }
+
+  setAlertMode(active: boolean) {
+    if (this.alertMode === active) return;
+    this.alertMode = active;
+    this.awarenessState = 'CLEAR';
+    this.awarenessTarget = null;
+    this.patrolState = 'TURN';
+    if (active) this.patrol.setRoute(CROWN_HALL_CONFIG.alertGuardRoute);
+    else this.patrol.reset(CROWN_HALL_CONFIG.guardRoute);
+    this.guard.navigationTarget.position.copyFrom(this.patrol.target);
+  }
+
+  reset() {
+    this.debugFrozen = false;
+    this.alertMode = false;
+    this.awarenessState = 'CLEAR';
+    this.awarenessTarget = null;
+    this.pauseRemaining = 0;
+    this.patrolState = 'PATROL';
+    this.patrol.reset(CROWN_HALL_CONFIG.guardRoute);
+    this.guard.position.copyFrom(this.patrol.start);
+    const initialDirection = this.patrol.target.subtract(this.patrol.start).normalize();
+    this.guard.root.rotation.y = Math.atan2(initialDirection.x, initialDirection.z);
+    this.forward.copyFrom(initialDirection);
+    this.guard.navigationTarget.position.copyFrom(this.patrol.target);
+    this.flashlight.reset();
   }
 
   private updateIdle(deltaTime: number) {
@@ -81,7 +119,8 @@ export class GuardController {
     }
 
     const direction = toTarget.scale(1 / distance);
-    const travel = Math.min(distance, GUARD_CONFIG.patrolSpeed * deltaTime);
+    const speed = this.alertMode ? GUARD_CONFIG.alertSpeed : GUARD_CONFIG.patrolSpeed;
+    const travel = Math.min(distance, speed * deltaTime);
     const result = moveCircleWithSliding(
       this.guard.position.x,
       this.guard.position.z,
@@ -120,7 +159,8 @@ export class GuardController {
   }
 
   get state(): GuardState {
-    return this.awarenessState === 'CLEAR' ? this.patrolState : this.awarenessState;
+    if (this.awarenessState !== 'CLEAR') return this.awarenessState;
+    return this.alertMode ? 'ALERT' : this.patrolState;
   }
 
   get patrolLabel() {

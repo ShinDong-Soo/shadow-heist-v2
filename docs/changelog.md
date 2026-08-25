@@ -2,6 +2,49 @@
 
 이 문서는 각 프로토타입에서 크게 바뀐 분야만 기록한다. 기능의 상세한 현재 동작은 [개발 문서 목차](README.md)의 담당 문서에서 관리한다.
 
+## Babylon 3D Crown Steal — Phase 06
+
+변경 분야:
+
+- `INFILTRATION → CROWN_STEAL → LOCKDOWN → ESCAPE` 게임 단계 흐름 추가
+- Hold E 1초, 입력 해제·발각 취소와 중복 실행 방지
+- 유리 케이스 상승, 왕관의 플레이어 방향 이동·축소와 0.75초 정적 연출
+- Crown Spotlight 소등, 일반 조명 감소와 2개 붉은 경보등 점멸
+- Web Audio 기반 잠입·탈출 BGM, 경보음, 셔터 모터·충돌음 추가
+- 2.4초 Security Gate 하강, 동적 출입구 충돌과 타이머 종료 후 재개방
+- 18초 LOCKDOWN Timer와 `SURVIVE LOCKDOWN`, `REACH THE EXIT` 목표 전환
+- 경비 ALERT 경로·속도·손전등 스캔 증가
+- R 전체 재시작, Shift+R 카메라 초기화, F6 강탈 시퀀스 테스트 추가
+- Babylon 셰이더 import 경로에 `.js`를 명시해 개발 서버의 빈 3D 화면 오류 수정
+
+관련 문서:
+
+- [3D 왕관 강탈 시퀀스](3d/crown-steal-sequence-3d.md)
+
+## Babylon 3D Crown Hall — Phase 05
+
+변경 분야:
+
+- 12m × 14m Dark Luxury 왕관실과 단일 출입구·입구 관찰 구역 구성
+- 왼쪽의 느린 엄폐 경로와 오른쪽의 빠른 노출 경로, 왕관 주변 열린 위험 구간 설계
+- 기둥·조각상·높은 전시물 4개를 이동 및 LOS 차단 엄폐물로 연결
+- 왕관실 외곽과 입구를 확인하는 9지점 경비 순찰 경로 적용
+- 받침대·유리 케이스·금색 프레임·왕관 Spotlight로 목표 전시 구조 제작
+- 거리·정면·방향을 모두 검사하는 `E STEAL` 상호작용 구현
+- `AVAILABLE`, `STOLEN` 상태와 독립된 `CROWN_STOLEN` 이벤트 연결점 추가
+- F4 왕관 상호작용, F5 엄폐 LOS 개발용 검증 위치 추가
+- WebGL 화면의 Painting 비용을 줄이기 위해 디버그 패널의 실시간 배경 블러 제거
+- 숨긴 디버그 Ray Mesh 갱신과 매 프레임 목표 UI DOM 쓰기 중단
+- 방향광 그림자를 512px Low 품질로 조정하고 고정 벽의 방향광 Shadow Caster 제외
+- 손전등 Bias 보정과 실제 엄폐물 중심의 제한된 Shadow Caster 유지
+- 금색 장식·벽 패널 병합과 왕관 가시 Instance로 장면 Mesh 69개에서 56개로 감소
+- 정적 환경 World Matrix 고정과 카메라·왕관·LOS 임시 Vector 재사용
+- 87% 내부 렌더링과 2초 구간 AVG·LOW FPS 계측 추가
+
+관련 문서:
+
+- [3D 왕관실과 왕관 상호작용](3d/crown-hall-3d.md)
+
 ## Babylon 3D Vision — Phase 04
 
 변경 분야:
@@ -17,7 +60,7 @@
 
 관련 문서:
 
-- [3D LOS와 플레이어 탐지](guard-vision-3d.md)
+- [3D LOS와 플레이어 탐지](3d/guard-vision-3d.md)
 
 ## Babylon 3D Guard — Phase 03
 
@@ -36,7 +79,7 @@
 
 관련 문서:
 
-- [3D 경비 순찰과 손전등](guard-patrol-3d.md)
+- [3D 경비 순찰과 손전등](3d/guard-patrol-3d.md)
 
 ## Babylon 3D Player — Phase 02
 
@@ -61,7 +104,7 @@
 
 관련 문서:
 
-- [3D 플레이어 이동과 탑다운 카메라](player-movement-3d.md)
+- [3D 플레이어 이동과 탑다운 카메라](3d/player-movement-3d.md)
 
 ## Babylon 3D Foundation — Phase 01
 
@@ -76,7 +119,7 @@
 
 관련 문서:
 
-- [Babylon.js 3D 기반](babylon-3d-foundation.md)
+- [Babylon.js 3D 기반](3d/babylon-3d-foundation.md)
 
 ## Prototype 33
 
@@ -94,7 +137,7 @@
 
 관련 문서:
 
-- [부분 3D 전환](partial-3d.md)
+- [부분 3D 전환](3d/partial-3d.md)
 - [강탈과 점수](heist-and-scoring.md)
 
 ## Prototype 32

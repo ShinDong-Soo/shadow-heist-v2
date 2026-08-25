@@ -17,12 +17,29 @@ const vision = document.querySelector<HTMLElement>('#vision3D');
 const detection = document.querySelector<HTMLElement>('#detection3D');
 const detectionFill = document.querySelector<HTMLElement>('#detectionFill3D');
 const detectionValue = document.querySelector<HTMLElement>('#detectionValue3D');
+const crown = document.querySelector<HTMLElement>('#crown3D');
+const flow = document.querySelector<HTMLElement>('#flow3D');
+const objective = document.querySelector<HTMLElement>('#objective3D');
+const interaction = document.querySelector<HTMLElement>('#interaction3D');
+const interactionLabel = document.querySelector<HTMLElement>('#interactionLabel3D');
+const interactionFill = document.querySelector<HTMLElement>('#interactionFill3D');
+const lockdown = document.querySelector<HTMLElement>('#lockdown3D');
+const phase = document.querySelector<HTMLElement>('#phase3D');
+const timer = document.querySelector<HTMLElement>('#timer3D');
+const gateState = document.querySelector<HTMLElement>('#gateState3D');
+const announcement = document.querySelector<HTMLElement>('#announcement3D');
+const alarmOverlay = document.querySelector<HTMLElement>('#alarmOverlay3D');
 
-if (!canvas || !debug || !loading || !loadingProgress || !loadingStatus || !fps || !camera || !meshCount || !movement || !position || !guard || !flashlight || !vision || !detection || !detectionFill || !detectionValue) {
+if (!canvas || !debug || !loading || !loadingProgress || !loadingStatus || !fps || !camera || !meshCount || !movement || !position || !guard || !flashlight || !vision || !detection || !detectionFill || !detectionValue || !crown || !flow || !objective || !interaction || !interactionLabel || !interactionFill || !lockdown || !phase || !timer || !gateState || !announcement || !alarmOverlay) {
   throw new Error('Babylon 3D bootstrap elements are missing.');
 }
 
-const game = new Game(canvas, { debug, loading, loadingProgress, loadingStatus, fps, camera, meshCount, movement, position, guard, flashlight, vision, detection, detectionFill, detectionValue });
+const game = new Game(canvas, {
+  debug, loading, loadingProgress, loadingStatus, fps, camera, meshCount, movement, position,
+  guard, flashlight, vision, detection, detectionFill, detectionValue, crown, flow, objective,
+  interaction, interactionLabel, interactionFill, lockdown, phase, timer, gateState, announcement,
+  alarmOverlay,
+});
 game.start().catch(error => {
   console.error('[3D Foundation] Startup failed.', error);
   loadingStatus.textContent = '3D STARTUP FAILED · CONSOLE을 확인하세요';

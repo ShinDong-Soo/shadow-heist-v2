@@ -2,6 +2,7 @@ import { Engine } from '@babylonjs/core/Engines/engine';
 import type { Scene } from '@babylonjs/core/scene';
 import { SceneManager } from './SceneManager';
 import type { PrototypeSceneResult } from '../scenes/PrototypeScene';
+import { GAME_3D_CONFIG } from '../config/gameConfig';
 
 type GameUi = {
   debug: HTMLElement;
@@ -19,6 +20,18 @@ type GameUi = {
   detection: HTMLElement;
   detectionFill: HTMLElement;
   detectionValue: HTMLElement;
+  crown: HTMLElement;
+  flow: HTMLElement;
+  objective: HTMLElement;
+  interaction: HTMLElement;
+  interactionLabel: HTMLElement;
+  interactionFill: HTMLElement;
+  lockdown: HTMLElement;
+  phase: HTMLElement;
+  timer: HTMLElement;
+  gateState: HTMLElement;
+  announcement: HTMLElement;
+  alarmOverlay: HTMLElement;
 };
 
 export class Game {
@@ -27,10 +40,21 @@ export class Game {
   private scene: Scene | null = null;
   private prototype: PrototypeSceneResult | null = null;
   private debugUpdateAt = 0;
-  private debugVisible = true;
+  private debugVisualsVisible = false;
+  private debugPanelVisible = true;
+  private lastInteractionAvailable: boolean | null = null;
+  private lastCrownStolen: boolean | null = null;
+  private lastObjective = '';
+  private lastAnnouncement = '';
+  private performanceElapsed = 0;
+  private performanceFrames = 0;
+  private performanceSlowestFrame = 0;
+  private averageFps = 0;
+  private lowFps = 0;
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly ui: GameUi) {
     this.engine = new Engine(canvas, true, { stencil: true, preserveDrawingBuffer: false }, true);
+    this.engine.setHardwareScalingLevel(GAME_3D_CONFIG.performance.hardwareScalingLevel);
     this.sceneManager = new SceneManager(this.engine, canvas);
   }
 
@@ -39,14 +63,18 @@ export class Game {
     const result = await this.sceneManager.createPrototypeScene((ratio, label) => this.updateLoading(ratio, label));
     this.scene = result.scene;
     this.prototype = result;
+    result.setDebugVisible(false);
     this.bindEvents();
     this.engine.runRenderLoop(() => {
-      const deltaTime = Math.min(.05, this.engine.getDeltaTime() / 1000);
+      const rawDeltaTime = Math.min(.25, this.engine.getDeltaTime() / 1000);
+      this.updatePerformanceStats(rawDeltaTime);
+      const deltaTime = Math.min(.05, rawDeltaTime);
       this.prototype?.update(deltaTime);
+      this.updateMissionUi();
       this.scene?.render();
       this.updateDebug();
     });
-    this.updateLoading(1, result.loadedModel ? 'GLB PIPELINE READY' : 'SCENE READY · GLB FALLBACK');
+    this.updateLoading(1, result.loadedModel ? 'CROWN HALL READY · GLB VERIFIED' : 'CROWN HALL READY · GLB FALLBACK');
     window.setTimeout(() => this.ui.loading.classList.add('complete'), 220);
     this.canvas.focus();
   }
@@ -65,27 +93,48 @@ export class Game {
 
   private readonly handleKeydown = (event: KeyboardEvent) => {
     if (!this.prototype) return;
-    if (event.code === 'KeyR') this.prototype.cameraRig.reset();
+    if (event.code === 'KeyR') {
+      event.preventDefault();
+      if (event.shiftKey) this.prototype.cameraRig.reset();
+      else this.prototype.resetCrownHall();
+    }
     if (event.code === 'Digit1') this.prototype.setCameraDistance('near');
     if (event.code === 'Digit2') this.prototype.setCameraDistance('medium');
     if (event.code === 'Digit3') this.prototype.setCameraDistance('far');
+    if (event.code === 'F4' && GAME_3D_CONFIG.debug) {
+      event.preventDefault();
+      this.prototype.teleportToCrownTest();
+    }
+    if (event.code === 'F5' && GAME_3D_CONFIG.debug) {
+      event.preventDefault();
+      this.prototype.setupCoverLosTest();
+    }
+    if (event.code === 'F6' && GAME_3D_CONFIG.debug) {
+      event.preventDefault();
+      this.prototype.startCrownSequenceTest();
+    }
     if (event.code === 'F1') {
       event.preventDefault();
-      this.debugVisible = !this.debugVisible;
-      this.prototype.setDebugVisible(this.debugVisible);
-      this.ui.debug.classList.toggle('hidden', !this.debugVisible);
+      this.debugVisualsVisible = !this.debugVisualsVisible;
+      this.prototype.setDebugVisible(this.debugVisualsVisible);
+    }
+    if (event.code === 'F2') {
+      event.preventDefault();
+      this.debugPanelVisible = !this.debugPanelVisible;
+      this.ui.debug.classList.toggle('hidden', !this.debugPanelVisible);
     }
   };
 
   private updateDebug() {
-    if (!this.scene || !this.prototype) return;
+    if (!this.scene || !this.prototype || !this.debugPanelVisible) return;
     const now = performance.now();
     if (now < this.debugUpdateAt) return;
     this.debugUpdateAt = now + 250;
-    const { cameraRig, controller, player, guard, guardController, guardFlashlight, guardVision, detection } = this.prototype;
+    const { cameraRig, controller, player, guard, guardController, guardFlashlight, guardVision, detection, crown, gameFlow, securityGate, alarm } = this.prototype;
     const camera = cameraRig.camera;
     const lightDirection = guardFlashlight.worldDirection;
-    this.ui.fps.textContent = `FPS ${Math.round(this.engine.getFps())}`;
+    const renderPercent = Math.round(100 / GAME_3D_CONFIG.performance.hardwareScalingLevel);
+    this.ui.fps.textContent = `FPS ${Math.round(this.engine.getFps())} · AVG ${this.averageFps} · LOW ${this.lowFps} · RENDER ${renderPercent}%`;
     this.ui.camera.textContent = `CAMERA ${cameraRig.distanceLabel} · ${camera.position.y.toFixed(1)}M HIGH · TARGET ${cameraRig.targetPosition.x.toFixed(2)}, ${cameraRig.targetPosition.z.toFixed(2)}`;
     this.ui.meshCount.textContent = `MESHES ${this.scene.meshes.length} · 1 UNIT = 1 M`;
     this.ui.movement.textContent = `INPUT ${controller.inputLabel} · SPEED ${controller.speed.toFixed(2)} M/S · DIR ${controller.direction.x.toFixed(2)}, ${controller.direction.z.toFixed(2)}`;
@@ -97,6 +146,58 @@ export class Game {
     this.ui.detectionFill.style.width = `${percent}%`;
     this.ui.detectionValue.textContent = `${detection.state} ${percent}%`;
     this.ui.detection.dataset.state = detection.state;
+    this.ui.crown.textContent = `CROWN ${crown.state} · INTERACT ${crown.interactionResult} · EVENT ${this.prototype.crownEvent}`;
+    this.ui.flow.textContent = `FLOW ${gameFlow.phase} · SEQ ${gameFlow.sequenceTime.toFixed(2)}S · GATE ${securityGate.state} · ALARM ${alarm.active ? 'ON' : 'OFF'} · TIMER ${gameFlow.lockdownRemaining.toFixed(1)}S`;
+  }
+
+  private updateMissionUi() {
+    if (!this.prototype) return;
+    const { gameFlow, securityGate, alarm } = this.prototype;
+    const stolen = gameFlow.hasCrown;
+    const interactionAvailable = this.prototype.interactionAvailable || gameFlow.isHolding;
+    if (interactionAvailable !== this.lastInteractionAvailable) {
+      this.lastInteractionAvailable = interactionAvailable;
+      this.ui.interaction.classList.toggle('visible', interactionAvailable);
+    }
+    this.ui.interactionLabel.textContent = gameFlow.isHolding ? 'SECURING CROWN' : 'HOLD TO STEAL CROWN';
+    this.ui.interactionFill.style.width = `${Math.round(gameFlow.holdProgress * 100)}%`;
+    if (stolen !== this.lastCrownStolen) {
+      this.lastCrownStolen = stolen;
+      this.ui.objective.classList.toggle('complete', stolen);
+    }
+    if (gameFlow.objective !== this.lastObjective) {
+      this.lastObjective = gameFlow.objective;
+      this.ui.objective.textContent = gameFlow.objective;
+    }
+
+    const lockdownVisible = gameFlow.phase === 'LOCKDOWN' || gameFlow.phase === 'ESCAPE';
+    this.ui.lockdown.classList.toggle('visible', lockdownVisible);
+    this.ui.phase.textContent = gameFlow.phase;
+    this.ui.timer.textContent = gameFlow.phase === 'LOCKDOWN'
+      ? `00:${Math.ceil(gameFlow.lockdownRemaining).toString().padStart(2, '0')}`
+      : 'OPEN';
+    this.ui.gateState.textContent = `GATE ${securityGate.state}`;
+    this.ui.alarmOverlay.classList.toggle('active', alarm.active);
+
+    if (gameFlow.announcement !== this.lastAnnouncement) {
+      this.lastAnnouncement = gameFlow.announcement;
+      this.ui.announcement.textContent = gameFlow.announcement;
+      this.ui.announcement.dataset.tone = gameFlow.announcementTone;
+      this.ui.announcement.classList.toggle('visible', Boolean(gameFlow.announcement));
+    }
+  }
+
+  private updatePerformanceStats(deltaTime: number) {
+    if (deltaTime <= 0) return;
+    this.performanceElapsed += deltaTime;
+    this.performanceFrames += 1;
+    this.performanceSlowestFrame = Math.max(this.performanceSlowestFrame, deltaTime);
+    if (this.performanceElapsed < GAME_3D_CONFIG.performance.sampleWindowSeconds) return;
+    this.averageFps = Math.round(this.performanceFrames / this.performanceElapsed);
+    this.lowFps = Math.round(1 / this.performanceSlowestFrame);
+    this.performanceElapsed = 0;
+    this.performanceFrames = 0;
+    this.performanceSlowestFrame = 0;
   }
 
   dispose() {

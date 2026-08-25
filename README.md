@@ -48,7 +48,7 @@ npm run dev
 
 터미널에 표시되는 로컬 주소를 브라우저에서 열고 `잠입 시작`을 누릅니다. 브라우저 오디오 정책 때문에 소리는 시작 버튼을 누른 뒤 활성화됩니다.
 
-Babylon.js 3D LOS와 플레이어 탐지 장면은 `http://localhost:5173/3d.html`에서 확인합니다. 기존 시작 화면의 `BABYLON 3D PLAYER LAB` 링크로도 이동할 수 있습니다. `F1`을 누르면 순찰 경로, 시야 콘과 Ray 디버그 표시를 숨기거나 다시 볼 수 있습니다.
+Babylon.js 3D 왕관실은 `http://localhost:5173/3d.html`에서 확인합니다. 기존 시작 화면의 `BABYLON 3D CROWN HALL` 링크로도 이동할 수 있습니다. `F1`은 순찰·시야 디버그, `F4`는 왕관 상호작용 위치, `F5`는 엄폐 LOS 검증 위치로 이동하는 개발용 키입니다.
 
 Windows에서 PowerShell 실행 정책 오류가 나오거나 프로젝트 폴더를 찾기 어렵다면 [start-server.cmd](start-server.cmd)를 더블클릭합니다. 이 파일은 프로젝트 폴더로 자동 이동하고 PowerShell 스크립트 대신 `npm.cmd`로 서버를 실행합니다.
 
@@ -81,9 +81,6 @@ Codex는 경비 AI, LOS와 Fog, 소리 시스템, 플레이테스트 계측, 캐
 - [분야별 개발 문서](docs/README.md)
 - [캐릭터 에셋](docs/characters.md)
 - [플레이테스트](docs/playtest.md)
-- [Babylon.js 3D 기반](docs/babylon-3d-foundation.md)
-- [3D 플레이어 이동과 탑다운 카메라](docs/player-movement-3d.md)
-- [3D 경비 순찰과 손전등](docs/guard-patrol-3d.md)
-- [3D LOS와 플레이어 탐지](docs/guard-vision-3d.md)
+- [3D 전환 개발 문서 모음](docs/3d/README.md)
 - [크레딧과 에셋 출처](CREDITS.md)
 - [MIT License](LICENSE)

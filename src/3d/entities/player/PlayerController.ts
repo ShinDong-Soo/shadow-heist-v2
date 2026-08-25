@@ -14,6 +14,7 @@ export type { CollisionBox } from '../../systems/CollisionWorld';
 export class PlayerController {
   readonly velocity = Vector3.Zero();
   readonly direction = new Vector3(0, 0, 1);
+  private movementLocked = false;
 
   constructor(
     private readonly player: Player,
@@ -23,6 +24,10 @@ export class PlayerController {
   ) {}
 
   update(deltaTime: number) {
+    if (this.movementLocked) {
+      this.velocity.setAll(0);
+      return;
+    }
     const inputX = this.input.horizontal;
     const inputZ = this.input.vertical;
     const desiredDirection = this.getCameraRelativeDirection(inputX, inputZ);
@@ -41,6 +46,21 @@ export class PlayerController {
       const yawDelta = Scalar.NormalizeRadians(targetYaw - this.player.root.rotation.y);
       this.player.root.rotation.y += yawDelta * (1 - Math.exp(-GAME_3D_CONFIG.player.rotationSharpness * deltaTime));
     }
+  }
+
+  setMovementLocked(locked: boolean) {
+    this.movementLocked = locked;
+    if (locked) this.velocity.setAll(0);
+  }
+
+  reset() {
+    this.movementLocked = false;
+    this.velocity.setAll(0);
+    this.direction.copyFromFloats(0, 0, 1);
+  }
+
+  get isMovementLocked() {
+    return this.movementLocked;
   }
 
   get speed() {

@@ -136,7 +136,7 @@ SHADOW-HEIST_V2/
 - `tsconfig.json`: TypeScript 검사 설정
 - `docs/`: 분야별 개발 문서
 
-3D 구조의 자세한 설명과 실행 방법은 [Babylon.js 3D 기반](babylon-3d-foundation.md)에서 확인한다.
+3D 구조의 자세한 설명과 실행 방법은 [3D 전환 개발 문서 모음](3d/README.md)에서 확인한다.
 
 ## 현재 구조의 특징
 
