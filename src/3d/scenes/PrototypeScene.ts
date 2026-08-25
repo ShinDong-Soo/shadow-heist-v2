@@ -17,8 +17,17 @@ import type { Engine } from '@babylonjs/core/Engines/engine';
 import { AssetManager, type AssetProgress } from '../core/AssetManager';
 import { GameCamera, type CameraDistance } from '../camera/GameCamera';
 import { GAME_3D_CONFIG } from '../config/gameConfig';
+import { GUARD_PATROL_ROUTE } from '../config/guardConfig';
+import { Guard } from '../entities/guard/Guard';
+import { GuardController } from '../entities/guard/GuardController';
+import { GuardDebugView } from '../entities/guard/GuardDebugView';
+import { GuardFlashlight } from '../entities/guard/GuardFlashlight';
+import { GuardPatrol } from '../entities/guard/GuardPatrol';
+import { GuardVision } from '../entities/guard/GuardVision';
 import { Player } from '../entities/player/Player';
-import { PlayerController, type CollisionBox } from '../entities/player/PlayerController';
+import { PlayerController } from '../entities/player/PlayerController';
+import type { CollisionBox } from '../systems/CollisionWorld';
+import { DetectionSystem } from '../systems/DetectionSystem';
 import { InputManager } from '../systems/InputManager';
 
 export type PrototypeSceneResult = {
@@ -26,9 +35,15 @@ export type PrototypeSceneResult = {
   cameraRig: GameCamera;
   player: Player;
   controller: PlayerController;
+  guard: Guard;
+  guardController: GuardController;
+  guardFlashlight: GuardFlashlight;
+  guardVision: GuardVision;
+  detection: DetectionSystem;
   loadedModel: AbstractMesh | null;
   update: (deltaTime: number) => void;
   setCameraDistance: (mode: CameraDistance) => void;
+  setDebugVisible: (visible: boolean) => void;
   dispose: () => void;
 };
 
@@ -76,6 +91,7 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
     mesh.position.copyFromFloats(x, height / 2, z);
     mesh.material = material;
     mesh.receiveShadows = true;
+    mesh.metadata = { blocksMovement: true, blocksVision: true };
     shadowGenerator.addShadowCaster(mesh);
     collisionBoxes.push({ minX: x - width / 2, maxX: x + width / 2, minZ: z - depth / 2, maxZ: z + depth / 2 });
   };
@@ -90,43 +106,82 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
   addObstacle('gallery-l-wall', 3.2, 1.4, .45, 5.8, 2.45);
   addObstacle('gallery-short-wall', 5.1, 4.3, 4.2, .45, 2.45);
   addObstacle('collision-test-crate', -3.1, 3.4, 1.55, 1.55, 1.3, accentMaterial);
+  addObstacle('guard-test-pillar', .1, 2.9, 1, 1, 2.7);
 
   const input = new InputManager(canvas);
   const player = new Player(scene, shadowGenerator);
   const cameraRig = new GameCamera(scene, player);
   const controller = new PlayerController(player, input, cameraRig.camera, collisionBoxes);
+  const guardPatrol = new GuardPatrol(GUARD_PATROL_ROUTE);
+  const guard = new Guard(scene, shadowGenerator, guardPatrol.start);
+  const guardFlashlight = new GuardFlashlight(scene, guard);
+  const guardController = new GuardController(guard, guardPatrol, guardFlashlight, collisionBoxes);
+  const guardDebug = new GuardDebugView(scene, guard, guardPatrol);
+  const guardVision = new GuardVision(scene, guard, guardFlashlight, player);
+  const detection = new DetectionSystem();
 
   let loadedModel: AbstractMesh | null = null;
   try {
     const assets = new AssetManager(scene, onProgress);
     const loaded = await assets.loadPrototypeModel('test-cube.glb');
     loadedModel = loaded.meshes.find(mesh => mesh.name !== '__root__') ?? loaded.meshes[0] ?? null;
+    const modelPosition = new Vector3(-5.4, 0, 6.4);
     loaded.meshes.filter(mesh => !mesh.parent).forEach(rootMesh => {
-      rootMesh.position.addInPlace(new Vector3(-5.4, 0, 6.4));
+      rootMesh.position.addInPlace(modelPosition);
     });
     loaded.meshes.forEach(mesh => {
       mesh.receiveShadows = true;
+      mesh.metadata = { ...(mesh.metadata ?? {}), blocksMovement: true, blocksVision: true };
       shadowGenerator.addShadowCaster(mesh);
+    });
+    // The test GLB is a 1.5m cube. Keep its gameplay collider explicit so the
+    // imported model follows the same collision rules as code-built obstacles.
+    collisionBoxes.push({
+      minX: modelPosition.x - .75,
+      maxX: modelPosition.x + .75,
+      minZ: modelPosition.z - .75,
+      maxZ: modelPosition.z + .75,
     });
   } catch (error) {
     console.warn('[3D Foundation] GLB load failed; movement test remains available.', error);
     onProgress(.92, 'GLB FALLBACK ACTIVE');
   }
 
-  onProgress(1, 'PLAYER MOVEMENT READY');
+  guardFlashlight.setShadowCasters(scene.meshes.filter(mesh => (
+    mesh !== ground && !mesh.name.includes('debug')
+  )));
+
+  onProgress(1, 'GUARD VISION READY');
   return {
     scene,
     cameraRig,
     player,
     controller,
+    guard,
+    guardController,
+    guardFlashlight,
+    guardVision,
+    detection,
     loadedModel,
     update: deltaTime => {
       controller.update(deltaTime);
+      guardVision.update(deltaTime);
+      detection.update(guardVision.isPlayerVisible, deltaTime);
+      guardController.setAwareness(detection.state, guardVision.lastVisiblePosition);
+      guardController.update(deltaTime);
       cameraRig.update(deltaTime, controller.direction, controller.speed);
     },
     setCameraDistance: mode => cameraRig.setDistance(mode),
+    setDebugVisible: visible => {
+      guardDebug.setVisible(visible);
+      guardVision.setDebugVisible(visible);
+    },
     dispose: () => {
       input.dispose();
+      guardDebug.dispose();
+      guardVision.dispose();
+      guardFlashlight.dispose();
+      guard.dispose();
       player.dispose();
     },
   };

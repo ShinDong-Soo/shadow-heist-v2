@@ -10,6 +10,7 @@ import { GAME_3D_CONFIG } from '../../config/gameConfig';
 export class Player {
   readonly root: TransformNode;
   readonly cameraTarget: TransformNode;
+  readonly detectionTarget: TransformNode;
   readonly interactionPoint: TransformNode;
 
   constructor(scene: Scene, shadowGenerator: ShadowGenerator) {
@@ -39,6 +40,10 @@ export class Player {
     this.cameraTarget = new TransformNode('player-camera-target', scene);
     this.cameraTarget.parent = this.root;
     this.cameraTarget.position.y = GAME_3D_CONFIG.camera.targetHeight;
+
+    this.detectionTarget = new TransformNode('player-detection-target', scene);
+    this.detectionTarget.parent = this.root;
+    this.detectionTarget.position.y = 1.15;
 
     this.interactionPoint = new TransformNode('player-interaction-point', scene);
     this.interactionPoint.parent = this.root;

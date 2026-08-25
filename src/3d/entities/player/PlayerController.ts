@@ -5,10 +5,11 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import '@babylonjs/core/Culling/ray';
 import type { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { GAME_3D_CONFIG } from '../../config/gameConfig';
+import { moveCircleWithSliding, type CollisionBox } from '../../systems/CollisionWorld';
 import type { InputManager } from '../../systems/InputManager';
 import type { Player } from './Player';
 
-export type CollisionBox = { minX: number; maxX: number; minZ: number; maxZ: number };
+export type { CollisionBox } from '../../systems/CollisionWorld';
 
 export class PlayerController {
   readonly velocity = Vector3.Zero();
@@ -61,30 +62,18 @@ export class PlayerController {
 
   private moveWithSliding(delta: Vector3) {
     const radius = GAME_3D_CONFIG.player.radius;
-    let x = this.player.position.x + delta.x;
-    const z = this.player.position.z;
-    for (const box of this.collisionBoxes) {
-      if (!this.circleOverlapsBox(x, z, radius, box)) continue;
-      x = delta.x > 0 ? box.minX - radius : box.maxX + radius;
-      this.velocity.x = 0;
-    }
-    this.player.position.x = x;
-
-    let nextZ = z + delta.z;
-    for (const box of this.collisionBoxes) {
-      if (!this.circleOverlapsBox(this.player.position.x, nextZ, radius, box)) continue;
-      nextZ = delta.z > 0 ? box.minZ - radius : box.maxZ + radius;
-      this.velocity.z = 0;
-    }
-    this.player.position.z = nextZ;
+    const result = moveCircleWithSliding(
+      this.player.position.x,
+      this.player.position.z,
+      delta.x,
+      delta.z,
+      radius,
+      this.collisionBoxes,
+    );
+    this.player.position.x = result.x;
+    this.player.position.z = result.z;
+    if (result.blockedX) this.velocity.x = 0;
+    if (result.blockedZ) this.velocity.z = 0;
     this.player.position.y = 0;
-  }
-
-  private circleOverlapsBox(x: number, z: number, radius: number, box: CollisionBox) {
-    const closestX = Math.max(box.minX, Math.min(x, box.maxX));
-    const closestZ = Math.max(box.minZ, Math.min(z, box.maxZ));
-    const dx = x - closestX;
-    const dz = z - closestZ;
-    return dx * dx + dz * dz < radius * radius;
   }
 }

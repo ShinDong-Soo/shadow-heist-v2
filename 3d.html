@@ -4,20 +4,20 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#111719" />
-    <title>Shadow Heist V2 — 3D Player Movement</title>
+    <title>Shadow Heist V2 — 3D LOS + Player Detection</title>
   </head>
   <body>
     <main id="prototype3D">
-      <canvas id="renderCanvas" tabindex="0" aria-label="Shadow Heist Babylon.js 3D 플레이어 이동 장면"></canvas>
+      <canvas id="renderCanvas" tabindex="0" aria-label="Shadow Heist Babylon.js 3D 경비 순찰과 손전등 장면"></canvas>
       <section id="loading3D" class="loading-3d" aria-live="polite">
         <span>SHADOW HEIST V2</span>
-        <strong>Loading Player Movement...</strong>
+        <strong>Loading Guard Vision...</strong>
         <div><i id="loadingProgress3D"></i></div>
         <small id="loadingStatus3D">ENGINE INITIALIZING</small>
       </section>
       <header class="prototype-3d-header">
-        <span>BABYLON.JS PLAYER // PHASE 02</span>
-        <strong>MOVEMENT + CAMERA LAB</strong>
+        <span>BABYLON.JS VISION // PHASE 04</span>
+        <strong>LOS + PLAYER DETECTION LAB</strong>
       </header>
       <aside id="debug3D" class="debug-3d" aria-label="3D 성능 정보">
         <span>DEBUG</span>
@@ -26,11 +26,20 @@
         <small id="meshCount3D">MESHES --</small>
         <small id="movement3D">SPEED --</small>
         <small id="position3D">PLAYER --</small>
+        <small id="guard3D">GUARD --</small>
+        <small id="flashlight3D">LIGHT --</small>
+        <small id="vision3D">VISION --</small>
+        <div id="detection3D" class="detection-3d" data-state="CLEAR">
+          <span>DETECTION</span>
+          <i><b id="detectionFill3D"></b></i>
+          <em id="detectionValue3D">CLEAR 0%</em>
+        </div>
       </aside>
       <section class="prototype-3d-guide">
         <span>WASD</span> 이동
         <span>1·2·3</span> 카메라 거리 비교
         <span>R</span> 카메라 초기화
+        <span>F1</span> 경비 디버그
       </section>
       <a class="back-to-game" href="./">← 2D PROTOTYPE</a>
     </main>

@@ -15,9 +15,18 @@ body { background: #0d1214; }
 .prototype-3d-header span { color: #c4a451; font-size: 9px; letter-spacing: .24em; }
 .prototype-3d-header strong { color: #e1ebe8; font: 600 15px system-ui, sans-serif; letter-spacing: .1em; }
 .debug-3d { position: fixed; right: 24px; top: 23px; min-width: 255px; display: grid; gap: 5px; padding: 12px 14px; border: 1px solid rgba(106,143,136,.25); background: rgba(7,12,13,.72); backdrop-filter: blur(8px); }
+.debug-3d.hidden { display: none; }
 .debug-3d span { color: #5db6a5; font-size: 8px; letter-spacing: .28em; }
 .debug-3d b { color: #dbe9e5; font-size: 15px; }
 .debug-3d small { color: #758986; font-size: 8px; letter-spacing: .06em; }
+.detection-3d { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; margin-top: 5px; }
+.detection-3d span, .detection-3d em { color: #758986; font-size: 8px; font-style: normal; letter-spacing: .08em; }
+.detection-3d i { display: block; width: 90px; height: 4px; overflow: hidden; background: #25302f; }
+.detection-3d i b { display: block; width: 0; height: 100%; background: #62c9ae; transition: width .08s linear, background .18s; }
+.detection-3d[data-state="SUSPICIOUS"] i b { background: #e0ae4e; }
+.detection-3d[data-state="DETECTED"] i b { background: #e95d48; box-shadow: 0 0 8px rgba(233,93,72,.8); }
+.detection-3d[data-state="SUSPICIOUS"] em { color: #e0ae4e; }
+.detection-3d[data-state="DETECTED"] em { color: #f07966; }
 .prototype-3d-guide { position: fixed; left: 50%; bottom: 25px; display: flex; gap: 12px; align-items: center; transform: translateX(-50%); color: #82928f; font-size: 9px; }
 .prototype-3d-guide span { color: #d6b55e; font-weight: 700; letter-spacing: .12em; }
 .back-to-game { position: fixed; left: 25px; bottom: 23px; padding: 9px 11px; border: 1px solid rgba(113,139,134,.28); color: #9db0ac; background: rgba(8,13,14,.68); font-size: 9px; letter-spacing: .1em; text-decoration: none; }

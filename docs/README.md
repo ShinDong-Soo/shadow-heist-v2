@@ -20,8 +20,11 @@
 8. [부분 3D 전환](partial-3d.md)
 9. [Babylon.js 3D 기반](babylon-3d-foundation.md)
 10. [3D 플레이어 이동과 탑다운 카메라](player-movement-3d.md)
-11. [플레이테스트 도구와 밸런스](playtest-tools.md)
-12. 관심 있는 나머지 분야
+11. [3D 1·2단계 완료 현황](3d-phase-status.md)
+12. [3D 경비 순찰과 손전등](guard-patrol-3d.md)
+13. [3D LOS와 플레이어 탐지](guard-vision-3d.md)
+14. [플레이테스트 도구와 밸런스](playtest-tools.md)
+15. 관심 있는 나머지 분야
 
 ## 분야별 문서
 
@@ -38,6 +41,9 @@
 | [부분 3D 전환](partial-3d.md) | 보물 획득 1인칭 장면, E 유지 상호작용, 3D 검증 기준과 성능 원칙 |
 | [Babylon.js 3D 기반](babylon-3d-foundation.md) | 별도 3D 진입점, Babylon 엔진, 장면 구조, GLB 로더, 에셋 폴더와 디버그 |
 | [3D 플레이어 이동과 탑다운 카메라](player-movement-3d.md) | 임시 캡슐, 카메라 기준 WASD, 가감속, 회전, 벽 충돌, 추적 카메라 |
+| [3D 1·2단계 완료 현황](3d-phase-status.md) | 기획안 체크리스트, 로컬 검증 결과, 외부 배포처럼 남아 있는 작업 |
+| [3D 경비 순찰과 손전등](guard-patrol-3d.md) | 경비 한 명, 웨이포인트 순찰, 정지·회전, 동적 손전등과 그림자, F1 디버그 |
+| [3D LOS와 플레이어 탐지](guard-vision-3d.md) | 거리·시야각·Raycast, 벽 차폐, 누적 탐지와 감소, 의심·발견 상태, 디버그 콘과 Ray |
 | [UI와 그래픽](ui-and-visuals.md) | HUD, 시작·결과 화면, 캐릭터, Fake 2.5D |
 | [플레이테스트](playtest.md) | 테스트 질문, 저장 데이터, 확인 목록 |
 | [플레이테스트 도구와 밸런스](playtest-tools.md) | F2 진단 패널, 기록 내보내기, 밸런스 수치 수정 |

@@ -10,8 +10,13 @@ export const GAME_3D_CONFIG = {
     beta: .72,
     fov: 50 * Math.PI / 180,
     targetHeight: .92,
-    lookAhead: .72,
-    followSharpness: 10,
+    // The player can move inside this camera-relative area without moving the
+    // camera. This removes constant micro-follow corrections near obstacles.
+    deadZoneHorizontal: 1.2,
+    deadZoneForward: .8,
+    lookAhead: .18,
+    lookAheadSharpness: 3.5,
+    followSharpness: 7,
     distancePresets: {
       near: 7.6,
       medium: 9.4,
