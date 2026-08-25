@@ -7,8 +7,10 @@ import type { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
 import type { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import type { Scene } from '@babylonjs/core/scene';
 
+export type AlarmState = 'INACTIVE' | 'TRIGGERING' | 'ACTIVE' | 'ENDING';
+
 export class AlarmSystem {
-  active = false;
+  state: AlarmState = 'INACTIVE';
   private elapsed = 0;
   private nextBeepAt = 0;
   private readonly lights: PointLight[] = [];
@@ -24,7 +26,12 @@ export class AlarmSystem {
     private readonly ambient: HemisphericLight,
     private readonly keyLight: DirectionalLight,
   ) {
-    const positions = [new Vector3(-4.9, 2.8, -3.8), new Vector3(4.9, 2.8, 5.75)];
+    const positions = [
+      new Vector3(-4.9, 2.8, 5.75),
+      new Vector3(-1.48, 2.6, -2.45),
+      new Vector3(1.48, 2.6, -2.45),
+      new Vector3(4.9, 2.8, -3.8),
+    ];
     positions.forEach((position, index) => {
       const material = new StandardMaterial(`alarm-beacon-material-${index}`, scene);
       material.diffuseColor = new Color3(.16, .012, .008);
@@ -40,12 +47,14 @@ export class AlarmSystem {
       housing.position.copyFrom(position);
       housing.material = material;
 
-      const light = new PointLight(`alarm-light-${index}`, position, scene);
-      light.diffuse = new Color3(1, .035, .018);
-      light.specular = new Color3(.5, .01, .005);
-      light.range = 5.6;
-      light.intensity = 0;
-      this.lights.push(light);
+      if (index === 0 || index === positions.length - 1) {
+        const light = new PointLight(`alarm-light-${index}`, position, scene);
+        light.diffuse = new Color3(1, .035, .018);
+        light.specular = new Color3(.5, .01, .005);
+        light.range = 5.6;
+        light.intensity = 0;
+        this.lights.push(light);
+      }
     });
 
     window.addEventListener('keydown', this.unlockAudio, { once: true, capture: true });
@@ -55,10 +64,17 @@ export class AlarmSystem {
   update(deltaTime: number) {
     if (!this.active) return;
     this.elapsed += deltaTime;
+    if (this.state === 'TRIGGERING' && this.elapsed >= .32) {
+      this.state = 'ACTIVE';
+      this.startEscapeBed();
+    }
     const pulse = Math.sin(this.elapsed * Math.PI * 2 / .6) > -.5 ? 1 : .15;
     this.lights.forEach((light, index) => {
       light.intensity = (.72 + index * .08) * pulse;
-      this.beaconMaterials[index].emissiveColor.copyFromFloats(.72 * pulse, .012 * pulse, .006 * pulse);
+    });
+    this.beaconMaterials.forEach((material, index) => {
+      const offsetPulse = Math.sin((this.elapsed + index * .08) * Math.PI * 2 / .6) > -.5 ? 1 : .15;
+      material.emissiveColor.copyFromFloats(.72 * offsetPulse, .012 * offsetPulse, .006 * offsetPulse);
     });
     if (this.elapsed >= this.nextBeepAt) {
       this.playBeep();
@@ -73,17 +89,17 @@ export class AlarmSystem {
 
   activate() {
     if (this.active) return;
-    this.active = true;
+    this.state = 'TRIGGERING';
     this.elapsed = 0;
     this.nextBeepAt = 0;
     this.ambient.intensity = .34;
     this.keyLight.intensity = .56;
     this.ensureAudio();
-    this.startEscapeBed();
+    this.playWarningTone();
   }
 
   reset() {
-    this.active = false;
+    this.state = 'INACTIVE';
     this.elapsed = 0;
     this.nextBeepAt = 0;
     this.ambient.intensity = .48;
@@ -123,6 +139,18 @@ export class AlarmSystem {
     oscillator.connect(gain).connect(context.destination);
     oscillator.start();
     oscillator.stop(context.currentTime + .22);
+  }
+
+  playCountdownTick(seconds: number) {
+    this.playTone(520 + (5 - seconds) * 55, .045, .09, 'square');
+  }
+
+  playReleaseTone() {
+    this.playTone(440, .035, .32, 'sine', 760);
+  }
+
+  get active() {
+    return this.state === 'TRIGGERING' || this.state === 'ACTIVE' || this.state === 'ENDING';
   }
 
   dispose() {
@@ -204,6 +232,26 @@ export class AlarmSystem {
     oscillator.connect(gain).connect(context.destination);
     oscillator.start();
     oscillator.stop(context.currentTime + .15);
+  }
+
+  private playWarningTone() {
+    this.playTone(280, .055, .38, 'sawtooth', 560);
+  }
+
+  private playTone(frequency: number, volume: number, duration: number, type: OscillatorType, endFrequency?: number) {
+    const context = this.ensureAudio();
+    if (!context || context.state !== 'running') return;
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(frequency, context.currentTime);
+    if (endFrequency) oscillator.frequency.exponentialRampToValueAtTime(endFrequency, context.currentTime + duration);
+    gain.gain.setValueAtTime(.0001, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(volume, context.currentTime + .018);
+    gain.gain.exponentialRampToValueAtTime(.0001, context.currentTime + duration);
+    oscillator.connect(gain).connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + duration + .02);
   }
 
   private rampGain(node: GainNode | null, value: number, duration: number) {

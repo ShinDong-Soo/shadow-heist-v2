@@ -2,6 +2,23 @@
 
 이 문서는 각 프로토타입에서 크게 바뀐 분야만 기록한다. 기능의 상세한 현재 동작은 [개발 문서 목차](README.md)의 담당 문서에서 관리한다.
 
+## Babylon 3D Alarm + Lockdown — Phase 07
+
+변경 분야:
+
+- `ALARM`과 `LOCKDOWN` 단계 및 각 시스템의 세부 상태 분리
+- 다음 단계 연결용 `ALARM_STARTED`, `LOCKDOWN_STARTED`, `LOCKDOWN_ENDED`, `ESCAPE_AVAILABLE` 이벤트 추가
+- 18초를 왕관실·서쪽/중앙·출구 수색의 세 구간으로 나눈 경비 압박 적용
+- ALERT 경비의 웨이포인트 손전등 스캔과 탐지 거리 15% 증가
+- 셔터 하강 중 충돌과 문턱 플레이어 감지 정지로 끼임 방지
+- 왕관실·연결 통로·출구 경고등, 경보 시작음·5초 틱·봉쇄 해제음 추가
+- 5초 긴급 타이머와 `EXIT OPEN ↓ SOUTH GATE` 탈출 방향 표시 추가
+- 디버그 패널에 이벤트, Alarm/Lockdown 상태, 위험 구간, 게이트 안전 정지와 단계별 FPS 추가
+
+관련 문서:
+
+- [3D 경보와 봉쇄](3d/alarm-lockdown-3d.md)
+
 ## Babylon 3D Crown Steal — Phase 06
 
 변경 분야:

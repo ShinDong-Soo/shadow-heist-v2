@@ -19,6 +19,7 @@ const detectionFill = document.querySelector<HTMLElement>('#detectionFill3D');
 const detectionValue = document.querySelector<HTMLElement>('#detectionValue3D');
 const crown = document.querySelector<HTMLElement>('#crown3D');
 const flow = document.querySelector<HTMLElement>('#flow3D');
+const phasePerf = document.querySelector<HTMLElement>('#phasePerf3D');
 const objective = document.querySelector<HTMLElement>('#objective3D');
 const interaction = document.querySelector<HTMLElement>('#interaction3D');
 const interactionLabel = document.querySelector<HTMLElement>('#interactionLabel3D');
@@ -29,16 +30,17 @@ const timer = document.querySelector<HTMLElement>('#timer3D');
 const gateState = document.querySelector<HTMLElement>('#gateState3D');
 const announcement = document.querySelector<HTMLElement>('#announcement3D');
 const alarmOverlay = document.querySelector<HTMLElement>('#alarmOverlay3D');
+const exitMarker = document.querySelector<HTMLElement>('#exitMarker3D');
 
-if (!canvas || !debug || !loading || !loadingProgress || !loadingStatus || !fps || !camera || !meshCount || !movement || !position || !guard || !flashlight || !vision || !detection || !detectionFill || !detectionValue || !crown || !flow || !objective || !interaction || !interactionLabel || !interactionFill || !lockdown || !phase || !timer || !gateState || !announcement || !alarmOverlay) {
+if (!canvas || !debug || !loading || !loadingProgress || !loadingStatus || !fps || !camera || !meshCount || !movement || !position || !guard || !flashlight || !vision || !detection || !detectionFill || !detectionValue || !crown || !flow || !phasePerf || !objective || !interaction || !interactionLabel || !interactionFill || !lockdown || !phase || !timer || !gateState || !announcement || !alarmOverlay || !exitMarker) {
   throw new Error('Babylon 3D bootstrap elements are missing.');
 }
 
 const game = new Game(canvas, {
   debug, loading, loadingProgress, loadingStatus, fps, camera, meshCount, movement, position,
-  guard, flashlight, vision, detection, detectionFill, detectionValue, crown, flow, objective,
+  guard, flashlight, vision, detection, detectionFill, detectionValue, crown, flow, phasePerf, objective,
   interaction, interactionLabel, interactionFill, lockdown, phase, timer, gateState, announcement,
-  alarmOverlay,
+  alarmOverlay, exitMarker,
 });
 game.start().catch(error => {
   console.error('[3D Foundation] Startup failed.', error);

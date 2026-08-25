@@ -3,6 +3,7 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
+import type { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { CROWN_HALL_CONFIG } from '../config/crownHallConfig';
 import type { CollisionBox } from './CollisionWorld';
 
@@ -12,6 +13,7 @@ export class SecurityGate {
   readonly collisionBox: CollisionBox = { minX: 999, maxX: 999, minZ: 999, maxZ: 999 };
   state: SecurityGateState = 'OPEN';
   progress = 0;
+  blockedByPlayer = false;
   private readonly mesh: Mesh;
   private readonly statusMaterial: StandardMaterial;
   private closedListener: (() => void) | null = null;
@@ -48,9 +50,16 @@ export class SecurityGate {
     }
   }
 
-  update(deltaTime: number) {
+  update(deltaTime: number, playerPosition?: Vector3, playerRadius = .38) {
+    this.blockedByPlayer = false;
     if (this.state === 'CLOSING') {
-      this.progress = Math.min(1, this.progress + deltaTime / CROWN_HALL_CONFIG.lockdown.gateCloseDuration);
+      const inDoorway = playerPosition
+        && Math.abs(playerPosition.x) < 1.17 + playerRadius
+        && Math.abs(playerPosition.z + 5.25) < .3 + playerRadius;
+      this.blockedByPlayer = Boolean(inDoorway && this.progress < .4);
+      if (!this.blockedByPlayer) {
+        this.progress = Math.min(1, this.progress + deltaTime / CROWN_HALL_CONFIG.lockdown.gateCloseDuration);
+      }
       if (this.progress >= 1) {
         this.state = 'CLOSED';
         this.closedListener?.();
@@ -79,6 +88,7 @@ export class SecurityGate {
   reset() {
     this.progress = 0;
     this.state = 'OPEN';
+    this.blockedByPlayer = false;
     this.statusMaterial.emissiveColor.copyFromFloats(.03, .005, .002);
     this.applyProgress();
   }
@@ -94,7 +104,7 @@ export class SecurityGate {
 
   private applyProgress() {
     this.mesh.position.y = 4.36 - this.progress * 2.93;
-    const blocks = this.progress >= .68;
+    const blocks = this.progress >= .38;
     if (blocks) {
       this.collisionBox.minX = -1.17;
       this.collisionBox.maxX = 1.17;

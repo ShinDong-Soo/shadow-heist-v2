@@ -57,6 +57,7 @@ export type PrototypeSceneResult = {
   teleportToCrownTest: () => void;
   setupCoverLosTest: () => void;
   startCrownSequenceTest: () => void;
+  setLockdownFinalSecondsTest: () => void;
   resetCrownHall: () => void;
   dispose: () => void;
 };
@@ -278,9 +279,15 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
       securityGate.open();
       if (securityGate.progress > 0) alarm.playGateMotor(CROWN_HALL_CONFIG.lockdown.gateOpenDuration);
     },
-    setGuardAlert: active => guardController.setAlertMode(active),
+    setGuardAlert: active => {
+      guardController.setAlertMode(active);
+      guardVision.setAlertMode(active);
+    },
     setCameraCinematic: active => cameraRig.setCinematicMode(active),
     setCameraAlert: active => cameraRig.setAlertMode(active),
+    setLockdownThreatStage: stage => guardController.setLockdownStage(stage),
+    playLockdownTick: seconds => alarm.playCountdownTick(seconds),
+    playLockdownReleased: () => alarm.playReleaseTone(),
   });
 
   let loadedModel: AbstractMesh | null = null;
@@ -344,7 +351,7 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
       controller.update(deltaTime);
       crown.update(deltaTime);
       crownDisplay.update(deltaTime);
-      securityGate.update(deltaTime);
+      securityGate.update(deltaTime, player.position, GAME_3D_CONFIG.player.radius);
       alarm.update(deltaTime);
       guardVision.update(deltaTime);
       detection.update(guardVision.isPlayerVisible, deltaTime);
@@ -386,6 +393,9 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
       cameraRig.reset();
       gameFlow.debugStartSequence();
     },
+    setLockdownFinalSecondsTest: () => {
+      gameFlow.debugSetLockdownFinalSeconds();
+    },
     resetCrownHall: () => {
       crownEvent = 'WAITING';
       crown.reset();
@@ -393,6 +403,7 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
       securityGate.reset();
       alarm.reset();
       guardController.reset();
+      guardVision.setAlertMode(false);
       detection.reset();
       controller.reset();
       player.position.copyFromFloats(...GAME_3D_CONFIG.player.start);

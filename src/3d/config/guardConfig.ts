@@ -5,6 +5,7 @@ export const GUARD_CONFIG = {
   alertSpeed: 2.55,
   rotationSpeed: 2.45,
   pauseTime: .65,
+  alertPauseTime: 1.05,
   arrivalRadius: .08,
   flashlight: {
     height: 1.38,

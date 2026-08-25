@@ -22,6 +22,7 @@ type GameUi = {
   detectionValue: HTMLElement;
   crown: HTMLElement;
   flow: HTMLElement;
+  phasePerf: HTMLElement;
   objective: HTMLElement;
   interaction: HTMLElement;
   interactionLabel: HTMLElement;
@@ -32,6 +33,7 @@ type GameUi = {
   gateState: HTMLElement;
   announcement: HTMLElement;
   alarmOverlay: HTMLElement;
+  exitMarker: HTMLElement;
 };
 
 export class Game {
@@ -51,6 +53,7 @@ export class Game {
   private performanceSlowestFrame = 0;
   private averageFps = 0;
   private lowFps = 0;
+  private readonly phasePerformance = new Map<string, { elapsed: number; frames: number }>();
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly ui: GameUi) {
     this.engine = new Engine(canvas, true, { stencil: true, preserveDrawingBuffer: false }, true);
@@ -113,6 +116,10 @@ export class Game {
       event.preventDefault();
       this.prototype.startCrownSequenceTest();
     }
+    if (event.code === 'F7' && GAME_3D_CONFIG.debug) {
+      event.preventDefault();
+      this.prototype.setLockdownFinalSecondsTest();
+    }
     if (event.code === 'F1') {
       event.preventDefault();
       this.debugVisualsVisible = !this.debugVisualsVisible;
@@ -147,7 +154,11 @@ export class Game {
     this.ui.detectionValue.textContent = `${detection.state} ${percent}%`;
     this.ui.detection.dataset.state = detection.state;
     this.ui.crown.textContent = `CROWN ${crown.state} · INTERACT ${crown.interactionResult} · EVENT ${this.prototype.crownEvent}`;
-    this.ui.flow.textContent = `FLOW ${gameFlow.phase} · SEQ ${gameFlow.sequenceTime.toFixed(2)}S · GATE ${securityGate.state} · ALARM ${alarm.active ? 'ON' : 'OFF'} · TIMER ${gameFlow.lockdownRemaining.toFixed(1)}S`;
+    this.ui.flow.textContent = `FLOW ${gameFlow.phase} · EVENT ${gameFlow.lastEvent} · ALARM ${alarm.state} · LOCK ${gameFlow.lockdownState}/${gameFlow.lockdownThreatStage} · GATE ${securityGate.state}${securityGate.blockedByPlayer ? ' (PLAYER HOLD)' : ''} · TIMER ${gameFlow.lockdownRemaining.toFixed(1)}S`;
+    this.ui.phasePerf.textContent = `PHASE PERF ${['INFILTRATION', 'ALARM', 'LOCKDOWN'].map(phase => {
+      const sample = this.phasePerformance.get(phase);
+      return `${phase.slice(0, 4)} ${sample && sample.elapsed > .15 ? Math.round(sample.frames / sample.elapsed) : '--'} FPS`;
+    }).join(' · ')}`;
   }
 
   private updateMissionUi() {
@@ -170,14 +181,16 @@ export class Game {
       this.ui.objective.textContent = gameFlow.objective;
     }
 
-    const lockdownVisible = gameFlow.phase === 'LOCKDOWN' || gameFlow.phase === 'ESCAPE';
+    const lockdownVisible = gameFlow.phase === 'ALARM' || gameFlow.phase === 'LOCKDOWN' || gameFlow.phase === 'ESCAPE';
     this.ui.lockdown.classList.toggle('visible', lockdownVisible);
+    this.ui.lockdown.classList.toggle('urgent', gameFlow.phase === 'LOCKDOWN' && gameFlow.lockdownRemaining <= 5);
     this.ui.phase.textContent = gameFlow.phase;
     this.ui.timer.textContent = gameFlow.phase === 'LOCKDOWN'
       ? `00:${Math.ceil(gameFlow.lockdownRemaining).toString().padStart(2, '0')}`
-      : 'OPEN';
+      : gameFlow.phase === 'ALARM' ? 'ALERT' : 'OPEN';
     this.ui.gateState.textContent = `GATE ${securityGate.state}`;
     this.ui.alarmOverlay.classList.toggle('active', alarm.active);
+    this.ui.exitMarker.classList.toggle('visible', gameFlow.phase === 'ESCAPE');
 
     if (gameFlow.announcement !== this.lastAnnouncement) {
       this.lastAnnouncement = gameFlow.announcement;
@@ -189,6 +202,13 @@ export class Game {
 
   private updatePerformanceStats(deltaTime: number) {
     if (deltaTime <= 0) return;
+    const phase = this.prototype?.gameFlow.phase;
+    if (phase) {
+      const phaseSample = this.phasePerformance.get(phase) ?? { elapsed: 0, frames: 0 };
+      phaseSample.elapsed += deltaTime;
+      phaseSample.frames += 1;
+      this.phasePerformance.set(phase, phaseSample);
+    }
     this.performanceElapsed += deltaTime;
     this.performanceFrames += 1;
     this.performanceSlowestFrame = Math.max(this.performanceSlowestFrame, deltaTime);

@@ -1,5 +1,7 @@
 # 3D 왕관 강탈 시퀀스 — Phase 06
 
+> 이 문서는 6단계 구현 기록이다. 현재 경보·봉쇄 동작은 [7단계 문서](alarm-lockdown-3d.md)에서 확장되었으며, 특히 `ALARM` 분리, 게이트 충돌 시점과 경비 압박 경로는 7단계 문서를 기준으로 한다.
+
 이 문서는 왕관을 훔치는 순간부터 출구가 다시 열릴 때까지 어떤 코드가 어떤 순서로 움직이는지 초보 개발자도 따라갈 수 있게 설명한다.
 
 ## 플레이 흐름
@@ -135,11 +137,11 @@ CLOSING 68% 이상 / CLOSED
 | 짧은 정적과 Spotlight 소등 | 완료 |
 | 붉은 경보등과 약한 화면 가장자리 효과 | 완료 |
 | 잠입·탈출 BGM과 Alarm·Gate SFX | 완료 |
-| Security Gate 폐쇄·개방과 충돌 | 완료 |
+| Security Gate 폐쇄·개방과 기본 충돌 | 완료 · 7단계에서 끼임 방지 보완 |
 | Guard ALERT 경로·속도·손전등 변화 | 완료 |
 | LOCKDOWN 18초와 ESCAPE 전환 | 완료 |
 | 전체 상태 Reset | 완료 |
 | 로컬 Chrome 계열 브라우저·콘솔 검증 | 완료 |
 | 실제 공개 URL 배포 | 남음 |
 | 공개 URL Edge 검증 | 남음 |
-| Guard Chase·Search와 체포 | Phase 07 범위 |
+| Guard Chase·Search와 체포 | 이후 단계 범위 |

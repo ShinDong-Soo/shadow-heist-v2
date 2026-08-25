@@ -8,6 +8,7 @@ import type { DetectionState } from '../../systems/DetectionSystem';
 import type { Guard } from './Guard';
 import type { GuardFlashlight } from './GuardFlashlight';
 import type { GuardPatrol } from './GuardPatrol';
+import type { LockdownThreatStage } from '../../systems/LockdownSystem';
 
 export type GuardPatrolState = 'IDLE' | 'TURN' | 'PATROL';
 export type GuardState = GuardPatrolState | 'ALERT' | 'SUSPICIOUS' | 'DETECTED';
@@ -19,6 +20,9 @@ export class GuardController {
   private pauseRemaining = 0;
   private debugFrozen = false;
   private alertMode = false;
+  private lockdownStage: LockdownThreatStage = 'NONE';
+  private scanElapsed = 0;
+  private scanBaseYaw = 0;
   private readonly forward = new Vector3(0, 0, 1);
 
   constructor(
@@ -66,9 +70,22 @@ export class GuardController {
     this.guard.navigationTarget.position.copyFrom(this.patrol.target);
   }
 
+  setLockdownStage(stage: LockdownThreatStage) {
+    if (this.lockdownStage === stage) return;
+    this.lockdownStage = stage;
+    if (stage === 'NONE') return;
+    const routes = CROWN_HALL_CONFIG.lockdownGuardRoutes;
+    const route = stage === 'CROWN_SWEEP' ? routes.crown : stage === 'WEST_SWEEP' ? routes.west : routes.exit;
+    this.patrol.setRoute(route);
+    this.guard.navigationTarget.position.copyFrom(this.patrol.target);
+    this.patrolState = 'TURN';
+  }
+
   reset() {
     this.debugFrozen = false;
     this.alertMode = false;
+    this.lockdownStage = 'NONE';
+    this.scanElapsed = 0;
     this.awarenessState = 'CLEAR';
     this.awarenessTarget = null;
     this.pauseRemaining = 0;
@@ -83,6 +100,11 @@ export class GuardController {
   }
 
   private updateIdle(deltaTime: number) {
+    if (this.alertMode) {
+      this.scanElapsed += deltaTime;
+      this.guard.root.rotation.y = this.scanBaseYaw + Math.sin(this.scanElapsed * 4.5) * .52;
+      this.forward.copyFromFloats(Math.sin(this.guard.root.rotation.y), 0, Math.cos(this.guard.root.rotation.y));
+    }
     this.pauseRemaining -= deltaTime;
     if (this.pauseRemaining <= 0) this.patrolState = 'TURN';
   }
@@ -154,7 +176,9 @@ export class GuardController {
   private beginPauseAtWaypoint() {
     this.patrol.advance();
     this.guard.navigationTarget.position.copyFrom(this.patrol.target);
-    this.pauseRemaining = GUARD_CONFIG.pauseTime;
+    this.pauseRemaining = this.alertMode ? GUARD_CONFIG.alertPauseTime : GUARD_CONFIG.pauseTime;
+    this.scanElapsed = 0;
+    this.scanBaseYaw = this.guard.root.rotation.y;
     this.patrolState = 'IDLE';
   }
 
@@ -169,5 +193,9 @@ export class GuardController {
 
   get forwardDirection() {
     return this.forward;
+  }
+
+  get activeLockdownStage() {
+    return this.lockdownStage;
   }
 }

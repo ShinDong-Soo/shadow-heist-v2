@@ -28,6 +28,7 @@ export class GuardVision {
   private readonly cone: LinesMesh;
   private rayLine: LinesMesh;
   private debugVisible = false;
+  private alertMode = false;
   private readonly toTarget = Vector3.Zero();
   private readonly horizontalToTarget = Vector3.Zero();
   private readonly visionForward = Vector3.Zero();
@@ -96,7 +97,7 @@ export class GuardVision {
     this.distance = this.toTarget.length();
     this.blockedBy = 'NONE';
 
-    if (this.distance > GUARD_VISION_CONFIG.range) {
+    if (this.distance > this.effectiveRange) {
       this.setResult('OUT_OF_RANGE', origin, target);
       return;
     }
@@ -147,6 +148,14 @@ export class GuardVision {
     this.debugVisible = visible;
     this.cone.isVisible = visible;
     this.rayLine.isVisible = visible;
+  }
+
+  setAlertMode(active: boolean) {
+    this.alertMode = active;
+  }
+
+  get effectiveRange() {
+    return GUARD_VISION_CONFIG.range * (this.alertMode ? GUARD_VISION_CONFIG.alarmRangeMultiplier : 1);
   }
 
   dispose() {

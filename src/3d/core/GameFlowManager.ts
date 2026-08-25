@@ -1,6 +1,9 @@
 import { CROWN_HALL_CONFIG } from '../config/crownHallConfig';
 import { CrownStealSequence, type CrownStealCue } from '../systems/CrownStealSequence';
+import { LockdownSystem, type LockdownEvent, type LockdownThreatStage } from '../systems/LockdownSystem';
 import { GamePhase } from './GamePhase';
+
+export type GameFlowEvent = 'ALARM_STARTED' | 'LOCKDOWN_STARTED' | 'LOCKDOWN_ENDED' | 'ESCAPE_AVAILABLE';
 
 export type GameFlowEffects = {
   setPlayerLocked: (locked: boolean) => void;
@@ -15,20 +18,27 @@ export type GameFlowEffects = {
   setGuardAlert: (active: boolean) => void;
   setCameraCinematic: (active: boolean) => void;
   setCameraAlert: (active: boolean) => void;
+  setLockdownThreatStage: (stage: LockdownThreatStage) => void;
+  playLockdownTick: (seconds: number) => void;
+  playLockdownReleased: () => void;
 };
 
 export class GameFlowManager {
   phase = GamePhase.INFILTRATION;
   hasCrown = false;
   holdProgress = 0;
-  lockdownRemaining: number = CROWN_HALL_CONFIG.lockdown.duration;
   announcement = '';
   announcementTone: 'gold' | 'alarm' | 'clear' = 'gold';
   private readonly sequence = new CrownStealSequence();
+  private readonly lockdown: LockdownSystem;
   private holdElapsed = 0;
   private announcementRemaining = 0;
+  private readonly eventListeners = new Set<(event: GameFlowEvent) => void>();
+  lastEvent: GameFlowEvent | 'NONE' = 'NONE';
 
-  constructor(private readonly effects: GameFlowEffects) {}
+  constructor(private readonly effects: GameFlowEffects) {
+    this.lockdown = new LockdownSystem(this.handleLockdownEvent);
+  }
 
   update(deltaTime: number, interactionReady: boolean, interactHeld: boolean, playerDetected: boolean) {
     const safeDelta = Math.min(deltaTime, .05);
@@ -41,12 +51,8 @@ export class GameFlowManager {
       return;
     }
 
-    if (this.phase === GamePhase.CROWN_STEAL) return;
-
-    if (this.phase === GamePhase.LOCKDOWN) {
-      this.lockdownRemaining = Math.max(0, this.lockdownRemaining - safeDelta);
-      if (this.lockdownRemaining <= 0) this.beginEscape();
-    }
+    if (this.phase === GamePhase.CROWN_STEAL || this.phase === GamePhase.ALARM) return;
+    if (this.phase === GamePhase.LOCKDOWN) this.lockdown.update(safeDelta);
   }
 
   debugStartSequence() {
@@ -57,15 +63,20 @@ export class GameFlowManager {
     return true;
   }
 
+  debugSetLockdownFinalSeconds() {
+    return this.lockdown.debugSetRemaining(5);
+  }
+
   reset() {
     this.sequence.reset();
     this.phase = GamePhase.INFILTRATION;
     this.hasCrown = false;
     this.holdElapsed = 0;
     this.holdProgress = 0;
-    this.lockdownRemaining = CROWN_HALL_CONFIG.lockdown.duration;
+    this.lockdown.reset();
     this.announcement = '';
     this.announcementRemaining = 0;
+    this.lastEvent = 'NONE';
     this.effects.setPlayerLocked(false);
     this.effects.setDisplayOpening(false);
     this.effects.setCrownSpotlight(true);
@@ -74,10 +85,12 @@ export class GameFlowManager {
     this.effects.setGuardAlert(false);
     this.effects.setCameraCinematic(false);
     this.effects.setCameraAlert(false);
+    this.effects.setLockdownThreatStage('NONE');
   }
 
   get objective() {
     if (this.phase === GamePhase.CROWN_STEAL) return 'SECURING THE CROWN';
+    if (this.phase === GamePhase.ALARM) return 'SECURITY BREACH';
     if (this.phase === GamePhase.LOCKDOWN) return 'SURVIVE LOCKDOWN';
     if (this.phase === GamePhase.ESCAPE) return 'REACH THE EXIT';
     if (this.phase === GamePhase.COMPLETE) return 'HEIST COMPLETE';
@@ -89,8 +102,25 @@ export class GameFlowManager {
     return this.sequence.elapsed;
   }
 
+  get lockdownRemaining() {
+    return this.lockdown.remaining;
+  }
+
+  get lockdownState() {
+    return this.lockdown.state;
+  }
+
+  get lockdownThreatStage() {
+    return this.lockdown.threatStage;
+  }
+
   get isHolding() {
     return this.holdElapsed > 0 && this.phase === GamePhase.INFILTRATION;
+  }
+
+  onEvent(listener: (event: GameFlowEvent) => void) {
+    this.eventListeners.add(listener);
+    return () => this.eventListeners.delete(listener);
   }
 
   private updateHold(deltaTime: number, ready: boolean, held: boolean, detected: boolean) {
@@ -136,6 +166,8 @@ export class GameFlowManager {
     }
     if (cue === 'SPOTLIGHT_OFF') this.effects.setCrownSpotlight(false);
     if (cue === 'ALARM_START') {
+      this.phase = GamePhase.ALARM;
+      this.emitEvent('ALARM_STARTED');
       this.effects.setAlarm(true);
       this.effects.setCameraAlert(true);
       this.showAnnouncement('SECURITY BREACH', 'alarm', 1.35);
@@ -143,9 +175,7 @@ export class GameFlowManager {
     if (cue === 'GATE_CLOSE') this.effects.closeGate();
     if (cue === 'GUARD_ALERT') this.effects.setGuardAlert(true);
     if (cue === 'LOCKDOWN_START') {
-      this.phase = GamePhase.LOCKDOWN;
-      this.lockdownRemaining = CROWN_HALL_CONFIG.lockdown.duration;
-      this.showAnnouncement('LOCKDOWN', 'alarm', 1.2);
+      this.lockdown.start();
     }
     if (cue === 'PLAYER_RELEASE') {
       this.effects.setPlayerLocked(false);
@@ -153,10 +183,29 @@ export class GameFlowManager {
     }
   };
 
-  private beginEscape() {
-    this.phase = GamePhase.ESCAPE;
-    this.effects.openGate();
-    this.showAnnouncement('EXIT UNLOCKED', 'clear', 1.7);
+  private readonly handleLockdownEvent = (event: LockdownEvent) => {
+    if (event.type === 'LOCKDOWN_STARTED') {
+      this.phase = GamePhase.LOCKDOWN;
+      this.emitEvent('LOCKDOWN_STARTED');
+      this.showAnnouncement('LOCKDOWN', 'alarm', 1.2);
+    }
+    if (event.type === 'THREAT_STAGE_CHANGED') this.effects.setLockdownThreatStage(event.stage);
+    if (event.type === 'COUNTDOWN_TICK') this.effects.playLockdownTick(event.seconds);
+    if (event.type === 'LOCKDOWN_ENDED') {
+      this.emitEvent('LOCKDOWN_ENDED');
+      this.effects.openGate();
+      this.effects.playLockdownReleased();
+    }
+    if (event.type === 'ESCAPE_AVAILABLE') {
+      this.phase = GamePhase.ESCAPE;
+      this.emitEvent('ESCAPE_AVAILABLE');
+      this.showAnnouncement('EXIT UNLOCKED', 'clear', 1.7);
+    }
+  };
+
+  private emitEvent(event: GameFlowEvent) {
+    this.lastEvent = event;
+    this.eventListeners.forEach(listener => listener(event));
   }
 
   private showAnnouncement(message: string, tone: 'gold' | 'alarm' | 'clear', duration: number) {
