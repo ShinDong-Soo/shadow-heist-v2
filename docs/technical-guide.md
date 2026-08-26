@@ -2,7 +2,7 @@
 
 > 캐릭터 PNG의 위치와 로딩 구조는 [캐릭터 에셋](characters.md)에서 관리한다.
 
-`vite.config.ts`는 배포 경로를 `./`로 설정한다. 따라서 완성된 `dist/` 폴더를 루트 도메인뿐 아니라 GitHub Pages의 저장소 하위 주소에도 올릴 수 있다. `.github/workflows/build.yml`은 `main`, `feature` 푸시와 Pull Request마다 `npm ci`와 `npm run build`를 실행한다.
+`vite.config.ts`는 배포 경로를 `./`로 설정한다. 따라서 완성된 `dist/` 폴더를 루트 도메인뿐 아니라 GitHub Pages의 저장소 하위 주소에도 올릴 수 있다. `.github/workflows/build.yml`은 `main`, `feature` 푸시와 Pull Request마다 `npm ci`와 `npm run build`를 실행한다. `.github/workflows/deploy-pages.yml`은 `main` 푸시 때 `dist`를 GitHub Pages에 배포한다.
 
 이 문서는 프로젝트 실행 방법과 사용 기술, 현재 코드 구조를 초보 개발자 기준으로 설명한다.
 

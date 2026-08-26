@@ -4,6 +4,15 @@
 
 Shadow Heist V2는 설치 없이 브라우저에서 실행되는 Canvas 기반 스텔스 프로토타입입니다. 세 개의 하이스트를 차례로 통과하며 경비, CCTV, 추가 보물과 왕관 경보를 단계적으로 학습합니다. 기존 게임과 분리된 Babylon.js 3D 기반 화면에서 향후 부분 3D 전환도 시험할 수 있습니다.
 
+## 온라인 플레이
+
+로그인 없이 브라우저에서 바로 실행할 수 있습니다.
+
+- 3D 전체 박물관(권장): https://ShinDong-Soo.github.io/shadow-heist-v2/3d.html
+- 2D 프로토타입: https://ShinDong-Soo.github.io/shadow-heist-v2/
+
+`main` 브랜치에 푸시되면 GitHub Pages로 자동 배포됩니다.
+
 ## 핵심 차별점
 
 - 경비가 화면에 보이지 않아도 좌우 발소리와 거리 표시로 위치를 추측합니다.
@@ -60,7 +69,7 @@ npm run build
 npm run preview
 ```
 
-배포 파일은 `dist/`에 생성됩니다. 상대 경로 빌드를 사용하므로 루트 도메인과 GitHub Pages 같은 하위 경로에서 모두 호스팅할 수 있습니다.
+배포 파일은 `dist/`에 생성됩니다. 상대 경로 빌드를 사용하므로 루트 도메인과 GitHub Pages 같은 하위 경로에서 모두 호스팅할 수 있습니다. `main`에 푸시하면 `.github/workflows/deploy-pages.yml`이 `dist`를 GitHub Pages에 올립니다.
 
 ## 기술 구성
 
