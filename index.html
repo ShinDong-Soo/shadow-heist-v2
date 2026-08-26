@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#070a0c" />
+    <title>SHADOW HEIST — Tension Prototype</title>
+    <script type="module" crossorigin src="./assets/game-CM9YxKGz.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/modulepreload-polyfill-B5Qt9EMX.js">
+    <link rel="stylesheet" crossorigin href="./assets/game-CoZ4jC7R.css">
+  </head>
+  <body>
+    <main id="app">
+      <canvas id="game" aria-label="Shadow Heist 게임 화면"></canvas>
+
+      <section id="hud" aria-live="polite">
+        <div class="brand"><span>SHADOW</span> HEIST <small>PROTOTYPE 33</small></div>
+        <div class="objective">
+          <span class="label">OBJECTIVE</span>
+          <strong id="objectiveText">보물을 훔치고 살아서 돌아오세요</strong>
+        </div>
+        <div class="status" id="statusBadge"><i></i><span>미탐지</span></div>
+      </section>
+
+      <section id="soundMeter" aria-label="경비원 발소리 청취 안내">
+        <span class="sound-label">LISTEN</span>
+        <span id="soundDirection">헤드폰 권장</span>
+      </section>
+
+      <section id="onboarding" class="onboarding hidden" aria-live="polite">
+        <span id="onboardingStep">STEP 1 / 4</span>
+        <strong id="onboardingTitle">어둠 속에서 이동하세요</strong>
+        <p id="onboardingDetail"><b>WASD</b> 또는 방향키로 출구에서 벗어나세요.</p>
+        <div><i></i><i></i><i></i><i></i></div>
+      </section>
+
+      <section id="riskDecision" class="risk-decision hidden" aria-live="assertive">
+        <span>LOOT SECURED</span>
+        <strong id="riskValue">0</strong>
+        <div><b>지금 탈출</b><i>OR</i><b>더 깊이 <em id="riskMultiplier">×1.15</em></b></div>
+        <small>체포되면 이번 강탈 점수를 모두 잃습니다</small>
+      </section>
+
+      <section id="missionData" aria-label="강탈 현황">
+        <div><span>LOOT</span><b id="lootCount">0 / 3</b></div>
+        <div><span>TAKE</span><b id="scorePreview">0</b></div>
+        <div><span>ACCESS</span><b id="accessText">없음</b></div>
+        <div><span>MAP</span><b id="mapText">0%</b></div>
+        <div class="exposure-readout"><span>EXPOSURE</span><b id="exposureText">어두움</b><i></i><i></i><i></i></div>
+        <div class="noise-readout"><span>NOISE</span><b id="noiseText">정지</b><i></i><i></i><i></i></div>
+        <div class="alert-readout"><span>ALERT</span><b id="alertText">LEVEL 0</b><i></i><i></i><i></i></div>
+      </section>
+
+      <div id="prompt" class="prompt hidden"></div>
+      <div id="cameraWarning" class="camera-warning hidden"><span>CAMERA</span><b id="cameraDetection">0%</b></div>
+      <div id="securityWarning" class="security-warning hidden"><span>EXIT LOCKDOWN</span><b id="lockdownTime">0.0s</b></div>
+
+      <section id="immersiveTheft" class="immersive-theft" aria-hidden="true" aria-label="보물 확보 3D 장면">
+        <div class="theft-room" aria-hidden="true">
+          <div class="theft-ceiling"></div>
+          <div class="theft-wall theft-wall-left"></div>
+          <div class="theft-wall theft-wall-right"></div>
+          <div class="theft-floor"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="theft-light-cone"></div>
+          <div class="theft-pedestal">
+            <div class="theft-glass"></div>
+            <div id="theftArtifact" class="theft-artifact crown" aria-hidden="true"><i></i><i></i><i></i><b></b></div>
+          </div>
+          <div class="theft-hand"><i></i><b></b></div>
+        </div>
+        <header class="theft-header">
+          <span>IMMERSIVE HEIST VIEW</span>
+          <strong id="theftTargetName">THE GOLDEN CROWN</strong>
+          <small id="theftTargetValue">₩3,200,000</small>
+        </header>
+        <div class="theft-instruction">
+          <span id="theftInstruction">E를 길게 눌러 훔치기</span>
+          <div class="theft-progress"><i id="theftProgress"></i></div>
+          <small>놓으면 중단 · ESC 돌아가기</small>
+        </div>
+      </section>
+
+      <aside id="devPanel" class="dev-panel" aria-hidden="true">
+        <header><div><span>PLAYTEST TOOLS</span><strong>실시간 진단</strong></div><button id="closeDevPanel" type="button">×</button></header>
+        <pre id="devLiveData"></pre>
+        <div class="dev-options">
+          <label><input id="debugPaths" type="checkbox"> 경비 이동 경로 표시</label>
+          <label><input id="showNoiseWaves" type="checkbox" checked> 플레이어 소음 파동 표시</label>
+        </div>
+        <button id="preview3D" class="dev-preview-button" type="button">F3 · 부분 3D 획득 장면 미리보기</button>
+        <h3>최근 플레이 기록</h3>
+        <div id="recentRuns" class="recent-runs"></div>
+        <footer><button id="exportRuns" type="button">JSON 내보내기</button><button id="clearRuns" type="button">기록 초기화</button></footer>
+        <small>F2로 열기·닫기</small>
+      </aside>
+
+      <section id="startScreen" class="screen visible">
+        <div class="eyebrow" id="startHeistLabel">HEIST 01 // FIRST JOB</div>
+        <h1>소리만 믿고<br><em>훔쳐라.</em></h1>
+        <p id="startHeistDescription">첫 임무입니다. 경비 한 명의 시야를 피해 유물을 챙겨 입구로 돌아오세요.</p>
+        <button id="startButton">잠입 시작 <span>→</span></button>
+        <div class="controls"><b>WASD / 방향키</b> 저소음 이동 <b>SHIFT</b> 달리기·큰 소음 <b>C</b> 웅크리기 <b>E</b> 상호작용</div>
+        <a class="engine-lab-link" href="./3d.html">BABYLON 3D CROWN HALL →</a>
+      </section>
+
+      <section id="resultScreen" class="screen">
+        <div class="eyebrow" id="resultEyebrow">MISSION REPORT</div>
+        <h2 id="resultTitle">HEIST COMPLETE</h2>
+        <p id="resultMessage"></p>
+        <div class="report">
+          <span>확보 보물 <b id="resultLoot">0 / 3</b></span>
+          <span>최종 점수 <b id="resultScore">0</b></span>
+          <span>소요 시간 <b id="resultTime">00:00</b></span>
+          <span>발각 횟수 <b id="resultSpotted">0</b></span>
+          <span>최고 감지 <b id="resultDetection">0%</b></span>
+          <span>추격 시간 <b id="resultChase">0.0s</b></span>
+          <span>잠입 보너스 <b id="resultStealthBonus">0</b></span>
+          <span>최고 기록 <b id="resultBest">0</b></span>
+        </div>
+        <div class="result-actions">
+          <button id="nextHeistButton" class="hidden">다음 Heist <span>→</span></button>
+          <button id="retryButton">다시 잠입 <span>↻</span></button>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
