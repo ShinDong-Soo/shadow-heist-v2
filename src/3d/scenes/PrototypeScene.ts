@@ -26,6 +26,9 @@ import { GuardPatrol } from '../entities/guard/GuardPatrol';
 import { GuardVision } from '../entities/guard/GuardVision';
 import { Player } from '../entities/player/Player';
 import { PlayerController } from '../entities/player/PlayerController';
+import { PlayerHideController } from '../entities/player/PlayerHideController';
+import { PlayerAnimationController } from '../entities/player/PlayerAnimationController';
+import { LockerHideSpot } from '../entities/hide/LockerHideSpot';
 import { Crown } from '../entities/treasure/Crown';
 import { CrownDisplay } from '../entities/treasure/CrownDisplay';
 import type { CollisionBox } from '../systems/CollisionWorld';
@@ -33,6 +36,16 @@ import { DetectionSystem } from '../systems/DetectionSystem';
 import { InputManager } from '../systems/InputManager';
 import { AlarmSystem } from '../systems/AlarmSystem';
 import { SecurityGate } from '../systems/SecurityGate';
+import { StealthAudioSystem } from '../systems/StealthAudioSystem';
+import { InteractionSystem } from '../systems/InteractionSystem';
+import { GuardAnimationController } from '../entities/guard/GuardAnimationController';
+import { NoiseSystem, type PlayerNoiseMode } from '../systems/NoiseSystem';
+import { GuardHearing } from '../entities/guard/GuardHearing';
+import { GuardRadio } from '../entities/guard/GuardRadio';
+import { MUSEUM_MAP_CONFIG } from '../config/museumMapConfig';
+import { MuseumMap } from './MuseumMap';
+import { OptionalTreasure } from '../entities/treasure/OptionalTreasure';
+import { SecurityCamera3D } from '../systems/SecurityCamera3D';
 
 export type PrototypeSceneResult = {
   scene: Scene;
@@ -48,8 +61,17 @@ export type PrototypeSceneResult = {
   gameFlow: GameFlowManager;
   securityGate: SecurityGate;
   alarm: AlarmSystem;
+  hideController: PlayerHideController;
+  playerAnimation: PlayerAnimationController;
+  guardAnimation: GuardAnimationController;
   readonly crownEvent: string;
   readonly interactionAvailable: boolean;
+  readonly interactionLabel: string;
+  readonly currentZone: string;
+  readonly lootLabel: string;
+  readonly shortcutState: string;
+  readonly secondaryGuardLabel: string;
+  readonly securityCameraLabel: string;
   loadedModel: AbstractMesh | null;
   update: (deltaTime: number) => void;
   setCameraDistance: (mode: CameraDistance) => void;
@@ -58,6 +80,14 @@ export type PrototypeSceneResult = {
   setupCoverLosTest: () => void;
   startCrownSequenceTest: () => void;
   setLockdownFinalSecondsTest: () => void;
+  teleportToLockerTest: () => void;
+  teleportToLootTest: () => void;
+  teleportToSecurityTest: () => void;
+  teleportToEscapeRouteTest: () => void;
+  setupObservedLockerTest: () => void;
+  setupShelfLosTest: () => void;
+  teleportToExitTest: () => void;
+  cycleAnimationPreview: () => string;
   resetCrownHall: () => void;
   dispose: () => void;
 };
@@ -133,7 +163,7 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
     mesh.receiveShadows = true;
     mesh.metadata = { blocksMovement: true, blocksVision };
     if (castsKeyShadow) shadowGenerator.addShadowCaster(mesh);
-    collisionBoxes.push({ minX: x - width / 2, maxX: x + width / 2, minZ: z - depth / 2, maxZ: z + depth / 2 });
+    collisionBoxes.push({ minX: x - width / 2, maxX: x + width / 2, minZ: z - depth / 2, maxZ: z + depth / 2, minY: 0, maxY: height });
     return mesh;
   };
   const addTrim = (name: string, x: number, y: number, z: number, width: number, height: number, depth: number) => {
@@ -180,7 +210,7 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
     base.material = goldMaterial;
     base.metadata = { blocksMovement: true, blocksVision: true };
     shadowGenerator.addShadowCaster(base);
-    collisionBoxes.push({ minX: x - .62, maxX: x + .62, minZ: z - .62, maxZ: z + .62 });
+    collisionBoxes.push({ minX: x - .62, maxX: x + .62, minZ: z - .62, maxZ: z + .62, minY: 0, maxY: 3.35 });
   };
 
   // The left has a slower chain of full LOS blockers.
@@ -218,6 +248,17 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
   addTrim('observation-zone-front', 0, .035, -4.75, 2.4, .025, .045);
   addTrim('observation-zone-back', 0, .035, -3.45, 2.4, .025, .045);
 
+  // A compact archive edge demonstrates geometry-driven hiding. The shelf
+  // bodies are single meshes; painted bands suggest files without creating
+  // hundreds of individual book meshes.
+  addBoxObstacle('archive-shelf-cover-west', 2.4, 6.75, .42, 2.25, 2.35, wallMaterial, true, true);
+  addBoxObstacle('archive-shelf-cover-east', 4.1, 6.75, .42, 2.25, 2.35, wallMaterial, true, true);
+  for (const x of [2.4, 4.1]) {
+    addTrim(`archive-shelf-band-top-${x}`, x - .24, 1.78, 6.75, .035, .055, 2.05);
+    addTrim(`archive-shelf-band-mid-${x}`, x - .24, 1.14, 6.75, .035, .045, 2.05);
+    addTrim(`archive-shelf-band-low-${x}`, x - .24, .5, 6.75, .035, .045, 2.05);
+  }
+
   const mergedTrim = Mesh.MergeMeshes(decorativeTrims, true, true, undefined, false, true);
   if (mergedTrim) {
     mergedTrim.name = 'museum-gold-trim-merged';
@@ -231,12 +272,17 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
     mergedPanels.receiveShadows = true;
   }
 
+  const museumMap = new MuseumMap({ scene, shadowGenerator, collisionBoxes });
   const crownDisplay = new CrownDisplay(scene, shadowGenerator);
   collisionBoxes.push(crownDisplay.collisionBox);
   const crown = new Crown(scene, shadowGenerator);
   const securityGate = new SecurityGate(scene);
   collisionBoxes.push(securityGate.collisionBox);
   const alarm = new AlarmSystem(scene, ambient, keyLight);
+  const crownLocker = new LockerHideSpot(scene, shadowGenerator, new Vector3(5.2, 0, 7.28), 'crown-locker');
+  const archiveLocker = new LockerHideSpot(scene, shadowGenerator, museumMap.archiveLockerPosition, 'archive-locker');
+  const lockers = [archiveLocker, crownLocker];
+  lockers.forEach(locker => collisionBoxes.push(...locker.collisionBoxes));
   crownDisplay.spotlight.includedOnlyMeshes.push(...scene.meshes.filter(mesh => (
     mesh === hallFloor
     || mesh.name.startsWith('crown-')
@@ -246,14 +292,71 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
   const player = new Player(scene, shadowGenerator);
   const cameraRig = new GameCamera(scene, player);
   const controller = new PlayerController(player, input, cameraRig.camera, collisionBoxes);
-  const guardPatrol = new GuardPatrol(CROWN_HALL_CONFIG.guardRoute);
+  const securityCameras = [
+    new SecurityCamera3D(scene, player, new Vector3(-2.65, 2.45, -11), .65, 'west'),
+    new SecurityCamera3D(scene, player, new Vector3(2.65, 2.45, -7.3), -2.45, 'east'),
+  ];
+  const guardPatrol = new GuardPatrol(MUSEUM_MAP_CONFIG.guardA.normal);
   const guard = new Guard(scene, shadowGenerator, guardPatrol.start);
   const guardFlashlight = new GuardFlashlight(scene, guard);
-  const guardController = new GuardController(guard, guardPatrol, guardFlashlight, collisionBoxes);
+  const guardController = new GuardController(guard, guardPatrol, guardFlashlight, collisionBoxes, MUSEUM_MAP_CONFIG.guardA);
+  const guardHearing = new GuardHearing(guard);
   const guardDebug = new GuardDebugView(scene, guard, guardPatrol);
   const guardVision = new GuardVision(scene, guard, guardFlashlight, player);
+  const guardBPatrol = new GuardPatrol(MUSEUM_MAP_CONFIG.guardB.normal);
+  const guardB = new Guard(scene, shadowGenerator, guardBPatrol.start);
+  const guardBFlashlight = new GuardFlashlight(scene, guardB);
+  const guardBController = new GuardController(guardB, guardBPatrol, guardBFlashlight, collisionBoxes, MUSEUM_MAP_CONFIG.guardB);
+  const guardBHearing = new GuardHearing(guardB);
+  const guardBDebug = new GuardDebugView(scene, guardB, guardBPatrol);
+  const guardBVision = new GuardVision(scene, guardB, guardBFlashlight, player);
   const detection = new DetectionSystem();
+  const stealthAudio = new StealthAudioSystem(guard.position);
+  const noise = new NoiseSystem();
+  const playerAnimation = new PlayerAnimationController(player, controller, strength => {
+    const surface = noise.surfaceAt(player.position);
+    const mode: PlayerNoiseMode = controller.isCrouching ? 'CROUCH' : controller.isRunning ? 'RUN' : 'WALK';
+    stealthAudio.playPlayerFootstep(strength, surface);
+    noise.emitPlayerFootstep(player.position, mode, surface);
+  });
+  const guardAnimation = new GuardAnimationController(guard, guardController, strength => {
+    const surface = noise.surfaceAt(guard.position);
+    stealthAudio.playGuardFootstep(guard.position, player.position, hideController.state === 'HIDDEN', strength, surface);
+  });
+  const guardBAnimation = new GuardAnimationController(guardB, guardBController, strength => {
+    const surface = noise.surfaceAt(guardB.position);
+    stealthAudio.playGuardFootstep(guardB.position, player.position, hideController.state === 'HIDDEN', strength, surface);
+  });
+  const hideController = new PlayerHideController(player, controller, cameraRig, lockers, {
+    playDoor: opening => {
+      stealthAudio.playLockerDoor(opening);
+      const activeLocker = hideController.currentSpot ?? lockers.find(candidate => candidate.interactionReady) ?? archiveLocker;
+      noise.emit(activeLocker.root.getAbsolutePosition(), 'LOCKER_DOOR', .45, 7, 'METAL');
+    },
+    rememberLastKnown: position => {
+      guardVision.rememberLastKnownPosition(position);
+      guardBVision.rememberLastKnownPosition(position);
+    },
+    requestGuardInvestigation: (position, reason) => {
+      guardController.requestInvestigation(position, reason);
+      guardBController.receiveRadioReport(position, 'RADIO_OBSERVED_HIDE');
+    },
+  });
+  const radio = new GuardRadio();
+  const removeRadioA = guardController.radio.subscribe(report => radio.report(report.reporterId, report.position, report.reason));
+  const removeRadioB = guardBController.radio.subscribe(report => radio.report(report.reporterId, report.position, report.reason));
+  const removeSharedRadio = radio.subscribe(report => {
+    if (report.reporterId !== MUSEUM_MAP_CONFIG.guardA.id) guardController.receiveRadioReport(report.position, report.reason);
+    if (report.reporterId !== MUSEUM_MAP_CONFIG.guardB.id) guardBController.receiveRadioReport(report.position, report.reason);
+  });
+  const optionalTreasures = [
+    new OptionalTreasure(scene, shadowGenerator, 'antique-watch', 'ANTIQUE WATCH', 1200000, new Vector3(4.9, 0, -40), new Color3(.76, .5, .13)),
+    new OptionalTreasure(scene, shadowGenerator, 'royal-document', 'ROYAL DOCUMENT', 2000000, new Vector3(5.75, 0, -20.6), new Color3(.28, .65, .58)),
+    new OptionalTreasure(scene, shadowGenerator, 'diamond-brooch', 'DIAMOND BROOCH', 2800000, new Vector3(-5.35, 0, -25), new Color3(.4, .72, .95)),
+  ];
+  const interactionSystem = new InteractionSystem();
   guardDebug.setVisible(false);
+  guardBDebug.setVisible(false);
   crown.setDebugVisible(false);
 
   let crownEvent = 'WAITING';
@@ -266,11 +369,18 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
   const gameFlow = new GameFlowManager({
     setPlayerLocked: locked => controller.setMovementLocked(locked),
     setDisplayOpening: opening => crownDisplay.setOpening(opening),
-    beginCrownTake: () => crown.beginTake(player.interactionPoint.getAbsolutePosition()),
+    beginCrownTake: () => {
+      crown.beginTake(player.interactionPoint.getAbsolutePosition());
+      noise.emit(crown.root.position, 'CROWN', .72, 8, 'METAL');
+    },
     commitCrownSteal: () => crown.commitSteal(),
     setCrownSpotlight: active => crownDisplay.setSpotlightActive(active),
     beginSilence: () => alarm.beginSilence(),
-    setAlarm: active => active ? alarm.activate() : alarm.reset(),
+    setAlarm: active => {
+      if (active) alarm.activate();
+      else alarm.reset();
+      museumMap.setAlarmActive(active);
+    },
     closeGate: () => {
       securityGate.close();
       alarm.playGateMotor(CROWN_HALL_CONFIG.lockdown.gateCloseDuration);
@@ -282,13 +392,44 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
     setGuardAlert: active => {
       guardController.setAlertMode(active);
       guardVision.setAlertMode(active);
+      guardBController.setAlertMode(active);
+      guardBVision.setAlertMode(active);
+      if (active) {
+        const crownPosition = new Vector3(...CROWN_HALL_CONFIG.crown.position);
+        guardController.raiseAlarm(crownPosition);
+        guardBController.raiseAlarm(crownPosition);
+      }
     },
     setCameraCinematic: active => cameraRig.setCinematicMode(active),
     setCameraAlert: active => cameraRig.setAlertMode(active),
-    setLockdownThreatStage: stage => guardController.setLockdownStage(stage),
+    setCameraEscape: active => cameraRig.setEscapeMode(active),
+    setLockdownThreatStage: stage => {
+      guardController.setLockdownStage(stage);
+      guardBController.setLockdownStage(stage);
+    },
     playLockdownTick: seconds => alarm.playCountdownTick(seconds),
     playLockdownReleased: () => alarm.playReleaseTone(),
   });
+  guardController.setCaptureHandler(() => {
+    gameFlow.fail('CAUGHT BY SECURITY');
+  });
+  guardBController.setCaptureHandler(() => {
+    gameFlow.fail('CAUGHT BY SECURITY');
+  });
+  guardController.setSearchHandler((position, reason) => {
+    if (!hideController.isVulnerableAt(position)) return;
+    if (hideController.revealByGuard()) gameFlow.fail(reason === 'LOCKDOWN_SWEEP' ? 'LOCKER SEARCHED' : 'FOUND IN LOCKER');
+  });
+  guardBController.setSearchHandler((position, reason) => {
+    if (!hideController.isVulnerableAt(position)) return;
+    if (hideController.revealByGuard()) gameFlow.fail(reason === 'LOCKDOWN_SWEEP' ? 'LOCKER SEARCHED' : 'FOUND IN LOCKER');
+  });
+  const removeFlowListener = gameFlow.onEvent(event => {
+    if (event === 'ESCAPE_AVAILABLE') museumMap.setShortcutOpen(true);
+  });
+  let lootCount = 0;
+  let lootValue = 0;
+  let cctvReportCooldown = 0;
 
   let loadedModel: AbstractMesh | null = null;
   try {
@@ -312,6 +453,9 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
       || mesh.name.includes('debug')
       || mesh.name.startsWith('security-')
       || mesh.name.startsWith('alarm-')
+      || mesh.name.startsWith('hide-')
+      || mesh.name.startsWith('optional-treasure-')
+      || mesh.name.startsWith('museum-shortcut-')
       || mesh.name === 'crown-display-glass'
       || mesh.name === 'crown-light-pool'
       || mesh.name === 'crown-band'
@@ -324,8 +468,15 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
 
   guardFlashlight.setShadowCasters(scene.meshes.filter(mesh => (
     mesh.metadata?.blocksVision === true
-    || mesh.name === 'player-visual'
+    || player.visual.shadowCasters.includes(mesh)
     || guard.shadowCasters.includes(mesh)
+    || guardB.shadowCasters.includes(mesh)
+  )));
+  guardBFlashlight.setShadowCasters(scene.meshes.filter(mesh => (
+    mesh.metadata?.blocksVision === true
+    || player.visual.shadowCasters.includes(mesh)
+    || guard.shadowCasters.includes(mesh)
+    || guardB.shadowCasters.includes(mesh)
   )));
 
   const result: PrototypeSceneResult = {
@@ -342,27 +493,97 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
     gameFlow,
     securityGate,
     alarm,
+    hideController,
+    playerAnimation,
+    guardAnimation,
     get crownEvent() { return crownEvent; },
-    get interactionAvailable() { return crown.interactionResult === 'READY'; },
+    get interactionAvailable() { return interactionSystem.available; },
+    get interactionLabel() { return interactionSystem.label; },
+    get currentZone() { return museumMap.zoneAt(player.position).label; },
+    get lootLabel() { return `${lootCount}/${optionalTreasures.length} · ₩${lootValue.toLocaleString('ko-KR')}`; },
+    get shortcutState() { return museumMap.shortcutState; },
+    get secondaryGuardLabel() { return `${guardBController.fsmState}/${guardBController.state} · ${guardBController.transitionLabel} · NAV ${guardBController.navigationLabel} · POS ${guardB.position.x.toFixed(1)}, ${guardB.position.z.toFixed(1)}`; },
+    get securityCameraLabel() { return securityCameras.some(camera => camera.isPlayerVisible) ? 'PLAYER VISIBLE' : 'SCANNING'; },
     loadedModel,
     update: deltaTime => {
+      const interactPressed = input.consumeInteract();
+      const playerVisible = guardVision.isPlayerVisible || guardBVision.isPlayerVisible;
+      hideController.update(deltaTime, interactPressed, playerVisible, [guard.position, guardB.position]);
       crown.updateInteraction(player);
-      gameFlow.update(deltaTime, crown.interactionResult === 'READY', input.interactHeld, detection.state === 'DETECTED');
+      optionalTreasures.forEach(treasure => treasure.update(player, deltaTime));
+      const treasureCandidates = optionalTreasures.map(treasure => ({
+        id: treasure.id,
+        available: hideController.state === 'NORMAL' && treasure.interactionReady,
+        label: `TAKE ${treasure.label}`,
+        priority: 70,
+      }));
+      interactionSystem.update([
+        { id: 'hide', available: hideController.interactionReady, label: hideController.interactionLabel, priority: 100 },
+        { id: 'crown', available: hideController.state === 'NORMAL' && crown.interactionResult === 'READY', label: 'HOLD TO STEAL CROWN', priority: 50 },
+        ...treasureCandidates,
+      ]);
+      if (interactPressed) {
+        const treasure = optionalTreasures.find(candidate => interactionSystem.isSelected(candidate.id));
+        if (treasure?.collect()) {
+          lootCount += 1;
+          lootValue += treasure.value;
+          noise.emit(treasure.root.position, 'TREASURE', .38, 5.5, 'METAL');
+        }
+      }
+      gameFlow.update(deltaTime, interactionSystem.isSelected('crown'), interactionSystem.isSelected('crown') && input.interactHeld, detection.state === 'DETECTED');
+      const zone = museumMap.zoneAt(player.position);
+      if (zone.id === 'CROWN_HALL') gameFlow.discoverCrownHall();
+      if (gameFlow.phase === 'ESCAPE' && museumMap.isAtExit(player.position)) gameFlow.complete();
+      if (gameFlow.phase === 'LOCKDOWN') {
+        const campTarget = hideController.consumeLockdownCampInvestigation();
+        if (campTarget) {
+          guardController.requestInvestigation(campTarget, 'LOCKDOWN_SWEEP');
+          guardBController.requestInvestigation(campTarget, 'LOCKDOWN_SWEEP');
+        }
+      }
       controller.update(deltaTime);
+      playerAnimation.update(deltaTime, hideController.state, gameFlow.isHolding || gameFlow.phase === 'CROWN_STEAL');
+      noise.update(deltaTime);
+      const heardNoise = guardHearing.update(noise);
+      if (heardNoise) guardController.hearNoise(heardNoise.position, heardNoise.strength, heardNoise.kind);
+      const heardNoiseB = guardBHearing.update(noise);
+      if (heardNoiseB) guardBController.hearNoise(heardNoiseB.position, heardNoiseB.strength, heardNoiseB.kind);
       crown.update(deltaTime);
       crownDisplay.update(deltaTime);
       securityGate.update(deltaTime, player.position, GAME_3D_CONFIG.player.radius);
       alarm.update(deltaTime);
-      guardVision.update(deltaTime);
-      detection.update(guardVision.isPlayerVisible, deltaTime);
-      guardController.setAwareness(detection.state, guardVision.lastVisiblePosition);
+      museumMap.update(deltaTime);
       guardController.update(deltaTime);
+      guardBController.update(deltaTime);
+      guardAnimation.update(deltaTime);
+      guardBAnimation.update(deltaTime);
+      guardFlashlight.syncTransform();
+      guardBFlashlight.syncTransform();
+      guardDebug.update(guardController);
+      guardBDebug.update(guardBController);
+      guardVision.update(deltaTime);
+      guardBVision.update(deltaTime);
+      securityCameras.forEach(camera => camera.update(deltaTime, alarm.active));
+      const visibleCamera = securityCameras.find(camera => camera.isPlayerVisible);
+      detection.update(guardVision.isPlayerVisible || guardBVision.isPlayerVisible || Boolean(visibleCamera), deltaTime);
+      guardController.setAwareness(detection.state, guardVision.lastVisiblePosition, guardVision.isPlayerVisible);
+      guardBController.setAwareness(detection.state, guardBVision.lastVisiblePosition, guardBVision.isPlayerVisible);
+      cctvReportCooldown = Math.max(0, cctvReportCooldown - deltaTime);
+      if (visibleCamera && detection.state === 'DETECTED' && cctvReportCooldown <= 0) {
+        cctvReportCooldown = 2.5;
+        guardBController.requestInvestigation(visibleCamera.lastSeenPosition, 'CCTV_ALARM', 4.2);
+        guardController.receiveRadioReport(visibleCamera.lastSeenPosition, 'RADIO_CCTV_REPORT', 4);
+      }
+      const nearestGuard = Vector3.DistanceSquared(guard.position, player.position) <= Vector3.DistanceSquared(guardB.position, player.position) ? guard : guardB;
+      stealthAudio.update(deltaTime, nearestGuard.position, player.position, hideController.state === 'HIDDEN', hideController.tension);
       cameraRig.update(deltaTime, controller.direction, controller.speed);
     },
     setCameraDistance: mode => cameraRig.setDistance(mode),
     setDebugVisible: visible => {
       guardDebug.setVisible(visible);
+      guardBDebug.setVisible(visible);
       guardVision.setDebugVisible(visible);
+      guardBVision.setDebugVisible(visible);
       crown.setDebugVisible(visible);
     },
     teleportToCrownTest: () => {
@@ -396,6 +617,80 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
     setLockdownFinalSecondsTest: () => {
       gameFlow.debugSetLockdownFinalSeconds();
     },
+    teleportToLockerTest: () => {
+      guardController.setDebugFrozen(false);
+      guardBController.setDebugFrozen(false);
+      player.position.copyFrom(archiveLocker.entryPoint.getAbsolutePosition()).addInPlaceFromFloats(0, 0, -.25);
+      player.root.rotation.y = 0;
+      controller.velocity.setAll(0);
+      cameraRig.reset();
+    },
+    teleportToLootTest: () => {
+      hideController.reset();
+      player.position.copyFromFloats(4.9, 0, -41.05);
+      player.root.rotation.y = 0;
+      controller.velocity.setAll(0);
+      controller.direction.copyFromFloats(0, 0, 1);
+      cameraRig.reset();
+    },
+    teleportToSecurityTest: () => {
+      hideController.reset();
+      guardController.setDebugFrozen(false);
+      guardBController.setDebugFrozen(false);
+      player.position.copyFromFloats(0, 0, -9.2);
+      player.root.rotation.y = 0;
+      controller.velocity.setAll(0);
+      controller.direction.copyFromFloats(0, 0, 1);
+      detection.reset();
+      cctvReportCooldown = 0;
+      cameraRig.reset();
+    },
+    teleportToEscapeRouteTest: () => {
+      if (gameFlow.phase !== 'ESCAPE') return;
+      hideController.reset();
+      player.position.copyFromFloats(5.65, 0, -20.8);
+      player.root.rotation.y = Math.PI / 2;
+      controller.velocity.setAll(0);
+      controller.direction.copyFromFloats(1, 0, 0);
+      cameraRig.reset();
+      cameraRig.setAlertMode(true);
+      cameraRig.setEscapeMode(true);
+    },
+    setupObservedLockerTest: () => {
+      hideController.reset();
+      guardController.setDebugFrozen(false);
+      guardBController.setDebugFrozen(false);
+      player.position.copyFrom(archiveLocker.entryPoint.getAbsolutePosition()).addInPlaceFromFloats(0, 0, -.25);
+      player.root.rotation.y = 0;
+      controller.velocity.setAll(0);
+      guardB.position.copyFromFloats(-5.65, 0, -17.4);
+      guardB.root.rotation.y = Math.PI;
+      guard.position.copyFromFloats(-2.8, 0, -24.5);
+      guard.root.rotation.y = 0;
+      detection.reset();
+      cameraRig.reset();
+    },
+    setupShelfLosTest: () => {
+      hideController.reset();
+      guardController.setDebugFrozen(true);
+      player.position.copyFromFloats(3.2, 0, 6.75);
+      player.root.rotation.y = -Math.PI / 2;
+      controller.velocity.setAll(0);
+      guard.position.copyFromFloats(1.45, 0, 6.75);
+      guard.root.rotation.y = Math.PI / 2;
+      detection.reset();
+      cameraRig.reset();
+    },
+    teleportToExitTest: () => {
+      if (gameFlow.phase !== 'ESCAPE') return;
+      player.position.copyFromFloats(...MUSEUM_MAP_CONFIG.exit.position);
+      controller.velocity.setAll(0);
+      cameraRig.reset();
+    },
+    cycleAnimationPreview: () => {
+      const label = guardAnimation.cyclePreview();
+      return label;
+    },
     resetCrownHall: () => {
       crownEvent = 'WAITING';
       crown.reset();
@@ -403,10 +698,26 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
       securityGate.reset();
       alarm.reset();
       guardController.reset();
+      guardBController.reset();
+      guardAnimation.reset();
+      guardBAnimation.reset();
       guardVision.setAlertMode(false);
+      guardBVision.setAlertMode(false);
       detection.reset();
+      hideController.reset();
+      stealthAudio.reset(guard.position);
+      noise.reset();
+      guardHearing.reset();
+      guardBHearing.reset();
+      interactionSystem.reset();
+      optionalTreasures.forEach(treasure => treasure.reset());
+      lootCount = 0;
+      lootValue = 0;
+      cctvReportCooldown = 0;
+      museumMap.reset();
       controller.reset();
-      player.position.copyFromFloats(...GAME_3D_CONFIG.player.start);
+      playerAnimation.reset();
+      player.position.copyFromFloats(...MUSEUM_MAP_CONFIG.playerStart);
       player.root.rotation.y = 0;
       gameFlow.reset();
       input.clearInteractPress();
@@ -414,18 +725,31 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
     },
     dispose: () => {
       removeCrownListener();
+      removeFlowListener();
+      removeRadioA();
+      removeRadioB();
+      removeSharedRadio();
       input.dispose();
       guardDebug.dispose();
+      guardBDebug.dispose();
       guardVision.dispose();
+      guardBVision.dispose();
       guardFlashlight.dispose();
+      guardBFlashlight.dispose();
+      hideController.reset();
+      stealthAudio.dispose();
+      lockers.forEach(locker => locker.dispose());
+      optionalTreasures.forEach(treasure => treasure.dispose());
+      securityCameras.forEach(camera => camera.dispose());
       alarm.dispose();
       securityGate.dispose();
       guard.dispose();
+      guardB.dispose();
       crown.dispose();
       crownDisplay.dispose();
       player.dispose();
     },
   };
-  onProgress(1, 'CROWN HALL READY');
+  onProgress(1, 'FULL MUSEUM READY');
   return result;
 }

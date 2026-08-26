@@ -2,6 +2,93 @@
 
 이 문서는 각 프로토타입에서 크게 바뀐 분야만 기록한다. 기능의 상세한 현재 동작은 [개발 문서 목차](README.md)의 담당 문서에서 관리한다.
 
+## Babylon 3D Full Museum Map — Phase 11
+
+변경 분야:
+
+- 서비스 입구부터 동쪽 비상 출구까지 이어지는 7개 구역의 모듈러 3D 박물관 맵 제작
+- 회화실, 조각 홀, 기록 보관실, 보안 복도, 왕관실에 서로 다른 바닥·조명·Landmark와 잠입 방식 적용
+- Guard A와 Guard B의 평시·경보·Lockdown 경로와 구역 Portal 기반 장거리 이동 연결
+- 회전 CCTV 2대의 시야각·거리·벽 LOS 및 확정 탐지 무전 조사 연결
+- Archive와 Crown Hall Locker, 자연 엄폐, 가장 가까운 경비원 발소리 정보 통합
+- Antique Watch, Diamond Brooch, Royal Document 선택 보물과 획득 금액·소음 적용
+- 왕관실 발견 목표, 강탈, 전체 맵 경보, 비상 Shortcut 개방, 최종 탈출 완료 흐름 연결
+- 카메라 방향, Cutaway 벽, 공용 재질, Static Matrix, Emissive 경보등을 이용한 가독성과 웹 성능 보완
+- 선택 보물·CCTV·최종 출구를 빠르게 확인하는 개발 전용 테스트 키 추가
+- 남쪽 탈출 시 진행 방향을 약 1.7m 먼저 보여주는 Escape 전용 카메라와 넓은 시야 적용
+- Archive 동쪽 Shortcut부터 출구까지 점멸하는 3D 바닥 유도등과 구체적인 탈출 목표 문구 적용
+- 경보 손전등 범위와 경비 발소리 청취 거리를 늘리고 도달 불가능했던 `ALERT` 조명 상태 수정
+
+관련 문서:
+
+- [3D 박물관 전체 맵](3d/full-museum-map-3d.md)
+
+## Babylon 3D Guard AI FSM — Phase 10
+
+변경 분야:
+
+- Guard AI를 `PATROL → SUSPICIOUS → INVESTIGATE → SEARCH → RETURN`과 `CHASE → CAPTURE` 상태로 분리
+- 마지막 목격·청취 위치, 시각 상실 시간, 이동 방향과 목격한 은신처를 보관하는 GuardMemory 추가
+- LOS 상실 후 0.75초 유예와 짧은 방향 예측만 허용하고 현재 플레이어 위치 추적을 중단
+- 장애물 충돌과 좌우 우회, 유효 목표점 검사를 전담하는 GuardNavigation 추가
+- 마지막 정보 주변 3개, 경보 중 4개의 Search Point와 물리적인 순찰 경로 복귀 구현
+- 걷기·달리기·Locker·왕관 소리를 GuardHearing과 자극 우선순위로 FSM에 연결
+- 왕관 경보와 Lockdown을 속도·반응·수색 시간·수색 지점 보정으로 적용
+- 목격한 Locker만 기억·검사하도록 은신 시스템과 연결
+- 상태별 캐릭터 Animation과 손전등 집중도 동기화
+- FSM 상태·전환 이유·Memory 시간, Last Seen/Heard, Search Point와 Navigation 디버그 표시 추가
+- 향후 다중 경비 확장을 위한 GuardRadio Event 구조 추가
+- 목표 거리의 누적 진전량으로 Search·Investigate·Return 정체를 판정하고 막힌 Search Point 자동 건너뛰기 추가
+- 4개 반경과 8개 방향 후보를 이용해 Search Point의 위치 다양성과 유효 위치 선택 개선
+- 평균 FPS에 따라 내부 해상도를 67~87% 사이에서 조절하고 손전등 그림자 256px·2프레임 갱신 적용
+- Suspicious·Search·Chase 상태의 상체, 고개와 손전등 움직임 차이를 강화
+- Debug 패널 기본 숨김, 핵심 조작만 남긴 하단 안내와 접이식 Test Keys 적용
+
+관련 문서:
+
+- [3D Guard AI FSM](3d/guard-ai-fsm-3d.md)
+
+## Babylon 3D Remaining Features — Phase 08·09 보완
+
+변경 분야:
+
+- Guard AI를 `PATROL → SUSPICIOUS → INVESTIGATE → SEARCH → PATROL` 및 `DETECTED → CHASE → CAPTURE` 흐름으로 완성
+- 시야를 잃으면 마지막 목격 위치를 조사하고, 조사 종료 뒤 기존 순찰 경로로 복귀하도록 연결
+- 경비가 목격한 Locker와 Lockdown 중 5.5초 이상 장기 은신한 Locker를 실제로 조사·개방하도록 구현
+- 체포 또는 Locker 발견 시 `FAILED` 게임 흐름, 이동 잠금과 실패 안내 연결
+- Stand 1.76m / Crouch 1.08m 충돌 높이를 이동 충돌 계산에 적용하고 낮은 엄폐물의 탐지 높이와 동기화
+- 왕관 상호작용 자세를 접촉 시점까지 유지하고 실제 오른손 위치에서 왕관 획득 이동이 시작되도록 수정
+- Marble·Carpet·Metal 표면 판정, 이동 방식별 소음 반경과 Guard 청각 조사 연결
+- 제공된 Guard 발소리 샘플을 거리·좌우·표면별 재생 속도와 함께 3D 장면에 연결
+
+관련 문서:
+
+- [3D 은신 시스템](3d/hiding-3d.md)
+- [3D 캐릭터 애니메이션](3d/character-animation-3d.md)
+- [미완성 기능 보완 완료](3d/remaining-plan-completion.md)
+
+## Babylon 3D Hiding — Phase 08
+
+변경 분야:
+
+- 벽·기둥·조각상·전시대·기록 선반의 실제 Geometry 기반 자연 은폐 유지 및 재검증
+- 북동 Archive에 최적화된 높은 기록 선반 두 개와 좁은 통로 추가
+- EntryPoint·HidePoint·ExitPoint·CameraTarget을 가진 공통 HideSpot 구조 추가
+- 직원용 Locker Mesh, 이동·LOS 충돌과 약 0.82초 문 열기·진입·닫기 연출 구현
+- `NORMAL → ENTERING_HIDE → HIDDEN → EXITING_HIDE` Player 상태와 HIDDEN 이동 잠금 추가
+- Crown과 Locker가 기존 E 입력을 공유하는 우선순위 기반 InteractionSystem 추가
+- 탑다운 구도를 유지하는 HIDE 카메라, Locker 전경과 최소 은신 UI 추가
+- 거리·좌우 Stereo Panning 기반 Guard 발소리와 문 소리·근거리 숨소리 추가
+- Guard가 보는 앞에서 숨으면 Detection과 Last Known Position을 유지하도록 연결
+- F8 Locker, F9 목격 은신, F10 선반 LOS 테스트 도구 추가
+- 선반과 겹치던 Guard 시작점·복귀 경로를 통로 입구 기준으로 재배치해 순찰 정지 수정
+- HIDE 카메라를 단순 탑다운 확대에서 높이 약 1.3m의 Locker 내부 관찰 시점으로 교체
+- Locker 문을 투명 판정막과 실제 상·하 금속판·관찰 틈으로 분리해 LOS는 막고 복도 일부만 확인하도록 개선
+
+관련 문서:
+
+- [3D 은신 시스템](3d/hiding-3d.md)
+
 ## Babylon 3D Alarm + Lockdown — Phase 07
 
 변경 분야:
@@ -725,3 +812,16 @@
 3. 관련 담당 문서 링크
 
 상세 기능 설명은 이 파일에 복사하지 않는다.
+# 2026-08-26 — 3D 09단계 캐릭터 애니메이션 리워크
+
+- Player와 Guard의 Capsule 표시를 관절형 Stylized CharacterVisual로 교체했다.
+- Player Idle, Walk, Run, Crouch, Crouch Walk, Interact, Hide Enter/Exit 자세를 연결했다.
+- Guard Patrol, Idle, Turn, Suspicious, Alert 상태를 실제 행동과 연결했다.
+- 다음 Guard AI 단계용 Investigate, Search, Chase 자세와 F3 미리보기를 준비했다.
+- 손전등 모델과 SpotLight를 경비원 손목 Socket에 함께 부착했다.
+- 실제 이동 거리를 기준으로 보행 주기와 발소리를 동기화했다.
+- 손전등이 먼 바닥을 비추던 문제를 고쳐 경비 앞 약 4m를 중심으로 비추게 했다.
+- 기둥과 겹치던 순찰·경계 경로를 수정하고 정체 시 다음 경로로 복구하는 안전장치를 추가했다.
+- F3 애니메이션 미리보기로 경비 AI가 계속 정지하던 문제를 제거했다.
+- 완전 발각된 경비가 제자리에서 멈추지 않고 마지막 목격 위치로 추격하도록 최소 Chase 이동을 연결했다.
+- 자세한 내용은 `docs/3d/character-animation-3d.md`에 정리했다.

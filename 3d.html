@@ -4,31 +4,35 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#111719" />
-    <title>Shadow Heist V2 — Crown Hall</title>
+    <title>Shadow Heist V2 — Full Museum Heist</title>
   </head>
   <body>
     <main id="prototype3D">
-      <canvas id="renderCanvas" tabindex="0" aria-label="Shadow Heist Babylon.js 3D 왕관실 잠입 장면"></canvas>
+      <canvas id="renderCanvas" tabindex="0" aria-label="Shadow Heist Babylon.js 3D 전체 박물관 잠입 장면"></canvas>
       <section id="loading3D" class="loading-3d" aria-live="polite">
         <span>SHADOW HEIST V2</span>
-        <strong>Loading Crown Hall...</strong>
+        <strong>Loading Museum...</strong>
         <div><i id="loadingProgress3D"></i></div>
         <small id="loadingStatus3D">ENGINE INITIALIZING</small>
       </section>
       <header class="prototype-3d-header">
-        <span>BABYLON.JS ALARM + LOCKDOWN // PHASE 07</span>
-        <strong>THE CROWN GALLERY</strong>
+        <span>BABYLON.JS FULL MUSEUM // PHASE 11</span>
+        <strong>SHADOW HEIST</strong>
       </header>
+      <section class="museum-status-3d" aria-live="polite">
+        <span id="zone3D">SERVICE ENTRANCE</span>
+        <strong id="loot3D">OPTIONAL LOOT 0 / 3</strong>
+      </section>
       <section class="objective-3d" aria-live="polite">
         <span>OBJECTIVE</span>
-        <strong id="objective3D">STEAL THE CROWN</strong>
+        <strong id="objective3D">FIND THE CROWN HALL</strong>
       </section>
       <section id="lockdown3D" class="lockdown-3d" aria-live="polite">
         <span id="phase3D">INFILTRATION</span>
         <strong id="timer3D">00:18</strong>
         <small id="gateState3D">GATE OPEN</small>
       </section>
-      <aside id="debug3D" class="debug-3d" aria-label="3D 성능 정보">
+      <aside id="debug3D" class="debug-3d hidden" aria-label="3D 성능 정보">
         <span>DEBUG</span>
         <b id="fps3D">FPS --</b>
         <small id="camera3D">CAMERA --</small>
@@ -36,10 +40,12 @@
         <small id="movement3D">SPEED --</small>
         <small id="position3D">PLAYER --</small>
         <small id="guard3D">GUARD --</small>
+        <small id="guardB3D">GUARD B --</small>
         <small id="flashlight3D">LIGHT --</small>
         <small id="vision3D">VISION --</small>
         <small id="crown3D">CROWN --</small>
         <small id="flow3D">FLOW --</small>
+        <small id="map3D">MAP --</small>
         <small id="phasePerf3D">PHASE PERF --</small>
         <div id="detection3D" class="detection-3d" data-state="CLEAR">
           <span>DETECTION</span>
@@ -54,22 +60,43 @@
       </div>
       <div id="announcement3D" class="announcement-3d" aria-live="assertive"></div>
       <div id="alarmOverlay3D" class="alarm-overlay-3d" aria-hidden="true"></div>
-      <div id="exitMarker3D" class="exit-marker-3d" aria-live="polite">
-        <span>EXIT OPEN</span>
-        <strong>↓ SOUTH GATE</strong>
+      <div id="hideOverlay3D" class="hide-overlay-3d" aria-hidden="true">
+        <i></i><i></i><i></i>
+        <span id="hideAwareness3D"></span>
       </div>
-      <section class="prototype-3d-guide">
-        <span>WASD</span> 이동
-        <span>1·2·3</span> 카메라 거리 비교
-        <span>R</span> 왕관실 재시작
-        <span>Shift+R</span> 카메라 초기화
-        <span>F1</span> 3D 디버그 표시
-        <span>F2</span> 성능 패널
-        <span>F4</span> 왕관 상호작용 테스트
-        <span>F5</span> 엄폐 LOS 테스트
-        <span>F6</span> 강탈 시퀀스 테스트
-        <span>F7</span> 락다운 5초 테스트
-        <span>Hold E</span> 왕관 훔치기
+      <div id="exitMarker3D" class="exit-marker-3d" aria-live="polite">
+        <span>ESCAPE ROUTE OPEN</span>
+        <strong>ARCHIVE EAST → SERVICE EXIT</strong>
+      </div>
+      <section class="prototype-3d-guide" aria-label="조작 안내">
+        <div class="guide-primary">
+          <span>WASD</span> 이동
+          <span>SHIFT</span> 달리기
+          <span>CTRL / C</span> 웅크리기
+          <span>HOLD E</span> 상호작용
+          <span>R</span> 재시작
+        </div>
+        <details>
+          <summary>TEST KEYS</summary>
+          <div>
+            <span>1·2·3</span> 카메라
+            <span>Shift+R</span> 카메라 초기화
+            <span>F1</span> 3D Debug
+            <span>F2</span> 성능 패널
+            <span>F3</span> 애니메이션
+            <span>F4</span> 왕관
+            <span>F5</span> 엄폐 LOS
+            <span>F6</span> 강탈
+            <span>F7</span> Lockdown
+            <span>F8</span> Locker
+            <span>F9</span> 목격 은신
+            <span>F10</span> 선반 LOS
+            <span>7</span> 비상 통로
+            <span>8</span> 선택 보물
+            <span>9</span> 보안 복도 CCTV
+            <span>0</span> 탈출 지점
+          </div>
+        </details>
       </section>
       <a class="back-to-game" href="./">← 2D PROTOTYPE</a>
     </main>

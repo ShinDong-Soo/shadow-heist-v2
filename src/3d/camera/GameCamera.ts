@@ -1,10 +1,12 @@
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { Scalar } from '@babylonjs/core/Maths/math.scalar';
 import type { Scene } from '@babylonjs/core/scene';
 import type { Player } from '../entities/player/Player';
 import { GAME_3D_CONFIG } from '../config/gameConfig';
 
 export type CameraDistance = keyof typeof GAME_3D_CONFIG.camera.distancePresets;
+export type CameraState = 'NORMAL' | 'HIDE' | 'LOCKDOWN' | 'ESCAPE';
 
 export class GameCamera {
   readonly camera: ArcRotateCamera;
@@ -19,6 +21,9 @@ export class GameCamera {
   private distanceMode: CameraDistance = 'medium';
   private alertMode = false;
   private cinematicMode = false;
+  private hideMode = false;
+  private escapeMode = false;
+  private readonly hideFocus = Vector3.Zero();
 
   constructor(scene: Scene, private readonly player: Player) {
     this.smoothTarget = player.cameraTarget.getAbsolutePosition().clone();
@@ -37,17 +42,42 @@ export class GameCamera {
 
   update(deltaTime: number, movementDirection: Vector3, speed: number) {
     const baseRadius = GAME_3D_CONFIG.camera.distancePresets[this.distanceMode];
-    const targetRadius = baseRadius + (this.alertMode ? .7 : 0) - (this.cinematicMode ? 1 : 0);
-    this.camera.radius += (targetRadius - this.camera.radius) * (1 - Math.exp(-5 * deltaTime));
+    const cameraBlend = 1 - Math.exp(-(this.hideMode ? 7 : 5) * deltaTime);
+    const radiusBonus = this.escapeMode
+      ? GAME_3D_CONFIG.camera.escapeRadiusBonus
+      : this.alertMode
+        ? .7
+        : 0;
+    const targetRadius = this.hideMode ? 1.35 : baseRadius + radiusBonus - (this.cinematicMode ? 1 : 0);
+    this.camera.radius += (targetRadius - this.camera.radius) * cameraBlend;
+    const targetBeta = this.hideMode ? Math.PI / 2 : GAME_3D_CONFIG.camera.beta;
+    this.camera.beta += (targetBeta - this.camera.beta) * cameraBlend;
+    const targetAlpha = this.hideMode ? Math.PI / 2 : GAME_3D_CONFIG.camera.alpha;
+    this.camera.alpha += Scalar.NormalizeRadians(targetAlpha - this.camera.alpha) * cameraBlend;
+    const targetFov = this.hideMode ? 58 * Math.PI / 180 : GAME_3D_CONFIG.camera.fov;
+    this.camera.fov += (targetFov - this.camera.fov) * cameraBlend;
     const playerTarget = this.player.cameraTarget.getAbsolutePosition();
-    const lookAmount = Math.min(1, speed / GAME_3D_CONFIG.player.walkSpeed) * GAME_3D_CONFIG.camera.lookAhead;
+    const lookDistance = this.escapeMode ? GAME_3D_CONFIG.camera.escapeLookAhead : GAME_3D_CONFIG.camera.lookAhead;
+    const lookSharpness = this.escapeMode ? GAME_3D_CONFIG.camera.escapeLookAheadSharpness : GAME_3D_CONFIG.camera.lookAheadSharpness;
+    const lookAmount = this.hideMode ? 0 : Math.min(1, speed / GAME_3D_CONFIG.player.walkSpeed) * lookDistance;
     movementDirection.scaleToRef(lookAmount, this.desiredLookAhead);
     Vector3.LerpToRef(
       this.lookAheadOffset,
       this.desiredLookAhead,
-      1 - Math.exp(-GAME_3D_CONFIG.camera.lookAheadSharpness * deltaTime),
+      1 - Math.exp(-lookSharpness * deltaTime),
       this.lookAheadOffset,
     );
+
+    if (this.hideMode) {
+      Vector3.LerpToRef(
+        this.smoothTarget,
+        this.hideFocus,
+        1 - Math.exp(-8 * deltaTime),
+        this.smoothTarget,
+      );
+      this.camera.setTarget(this.smoothTarget);
+      return;
+    }
 
     this.smoothTarget.subtractToRef(this.camera.position, this.viewForward);
     this.viewForward.y = 0;
@@ -60,7 +90,11 @@ export class GameCamera {
 
     this.desiredTarget.copyFrom(this.smoothTarget);
     this.moveTargetOutsideDeadZone(this.viewRight, horizontalOffset, GAME_3D_CONFIG.camera.deadZoneHorizontal);
-    this.moveTargetOutsideDeadZone(this.viewForward, forwardOffset, GAME_3D_CONFIG.camera.deadZoneForward);
+    this.moveTargetOutsideDeadZone(
+      this.viewForward,
+      forwardOffset,
+      this.escapeMode ? GAME_3D_CONFIG.camera.escapeDeadZoneForward : GAME_3D_CONFIG.camera.deadZoneForward,
+    );
     this.desiredTarget.y = playerTarget.y;
     Vector3.LerpToRef(
       this.smoothTarget,
@@ -92,13 +126,27 @@ export class GameCamera {
     this.alertMode = active;
   }
 
+  setEscapeMode(active: boolean) {
+    this.escapeMode = active;
+    if (!active) this.lookAheadOffset.setAll(0);
+  }
+
+  setHideMode(active: boolean, focus?: Vector3) {
+    this.hideMode = active;
+    if (focus) this.hideFocus.copyFrom(focus);
+    if (active) this.lookAheadOffset.setAll(0);
+  }
+
   reset() {
     this.camera.alpha = GAME_3D_CONFIG.camera.alpha;
     this.camera.beta = GAME_3D_CONFIG.camera.beta;
     this.setDistance('medium');
     this.camera.radius = GAME_3D_CONFIG.camera.distancePresets.medium;
+    this.camera.fov = GAME_3D_CONFIG.camera.fov;
     this.alertMode = false;
     this.cinematicMode = false;
+    this.hideMode = false;
+    this.escapeMode = false;
     this.lookAheadOffset.setAll(0);
     this.smoothTarget.copyFrom(this.player.cameraTarget.getAbsolutePosition());
     this.camera.setTarget(this.smoothTarget);
@@ -110,5 +158,12 @@ export class GameCamera {
 
   get targetPosition() {
     return this.smoothTarget;
+  }
+
+  get state(): CameraState {
+    if (this.hideMode) return 'HIDE';
+    if (this.escapeMode) return 'ESCAPE';
+    if (this.alertMode) return 'LOCKDOWN';
+    return 'NORMAL';
   }
 }

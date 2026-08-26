@@ -93,6 +93,8 @@ export class CrownDisplay {
       maxX: x + .72,
       minZ: z - .72,
       maxZ: z + .72,
+      minY: 0,
+      maxY: 2.24,
     };
   }
 

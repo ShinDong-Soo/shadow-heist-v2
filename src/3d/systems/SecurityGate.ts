@@ -110,6 +110,8 @@ export class SecurityGate {
       this.collisionBox.maxX = 1.17;
       this.collisionBox.minZ = -5.39;
       this.collisionBox.maxZ = -5.11;
+      this.collisionBox.minY = 0;
+      this.collisionBox.maxY = 2.65;
     } else {
       this.collisionBox.minX = 999;
       this.collisionBox.maxX = 999;

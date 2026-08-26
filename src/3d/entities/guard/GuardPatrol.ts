@@ -29,6 +29,20 @@ export class GuardPatrol {
     this.targetIndex = (this.targetIndex + 1) % this.points.length;
   }
 
+  setNearestTarget(position: Vector3) {
+    let nearestIndex = 0;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    this.points.forEach((point, index) => {
+      const distance = Vector3.DistanceSquared(point, position);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestIndex = index;
+      }
+    });
+    this.targetIndex = nearestIndex;
+    return this.target;
+  }
+
   setRoute(route: readonly (readonly [number, number, number])[]) {
     if (route.length < 2) throw new Error('Guard patrol requires at least two points.');
     this.points = route.map(([x, y, z]) => new Vector3(x, y, z));

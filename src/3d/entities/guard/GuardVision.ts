@@ -154,6 +154,10 @@ export class GuardVision {
     this.alertMode = active;
   }
 
+  rememberLastKnownPosition(position: Vector3) {
+    this.lastVisiblePosition.copyFrom(position);
+  }
+
   get effectiveRange() {
     return GUARD_VISION_CONFIG.range * (this.alertMode ? GUARD_VISION_CONFIG.alarmRangeMultiplier : 1);
   }

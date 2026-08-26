@@ -15,6 +15,8 @@ export class PlayerController {
   readonly velocity = Vector3.Zero();
   readonly direction = new Vector3(0, 0, 1);
   private movementLocked = false;
+  private running = false;
+  private crouching = false;
 
   constructor(
     private readonly player: Player,
@@ -32,8 +34,13 @@ export class PlayerController {
     const inputZ = this.input.vertical;
     const desiredDirection = this.getCameraRelativeDirection(inputX, inputZ);
     const hasInput = desiredDirection.lengthSquared() > .0001;
+    this.crouching = this.input.crouchHeld;
+    this.running = hasInput && this.input.runHeld && !this.crouching;
+    const movementSpeed = this.crouching
+      ? GAME_3D_CONFIG.player.crouchSpeed
+      : this.running ? GAME_3D_CONFIG.player.runSpeed : GAME_3D_CONFIG.player.walkSpeed;
     const desiredVelocity = hasInput
-      ? desiredDirection.scale(GAME_3D_CONFIG.player.walkSpeed)
+      ? desiredDirection.scale(movementSpeed)
       : Vector3.Zero();
     const sharpness = hasInput ? GAME_3D_CONFIG.player.acceleration : GAME_3D_CONFIG.player.deceleration;
     Vector3.LerpToRef(this.velocity, desiredVelocity, 1 - Math.exp(-sharpness * deltaTime), this.velocity);
@@ -55,6 +62,8 @@ export class PlayerController {
 
   reset() {
     this.movementLocked = false;
+    this.running = false;
+    this.crouching = false;
     this.velocity.setAll(0);
     this.direction.copyFromFloats(0, 0, 1);
   }
@@ -65,6 +74,18 @@ export class PlayerController {
 
   get speed() {
     return this.velocity.length();
+  }
+
+  get isRunning() {
+    return this.running;
+  }
+
+  get isCrouching() {
+    return this.crouching;
+  }
+
+  get stanceHeight() {
+    return this.crouching ? GAME_3D_CONFIG.player.crouchHeight : GAME_3D_CONFIG.player.height;
   }
 
   get inputLabel() {
@@ -89,6 +110,8 @@ export class PlayerController {
       delta.z,
       radius,
       this.collisionBoxes,
+      0,
+      this.stanceHeight,
     );
     this.player.position.x = result.x;
     this.player.position.z = result.z;

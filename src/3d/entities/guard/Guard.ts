@@ -7,6 +7,7 @@ import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { Scene } from '@babylonjs/core/scene';
 import type { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import { GUARD_CONFIG } from '../../config/guardConfig';
+import { ProceduralHumanoid } from '../../animation/ProceduralHumanoid';
 
 export class Guard {
   readonly root: TransformNode;
@@ -14,50 +15,26 @@ export class Guard {
   readonly detectionOrigin: TransformNode;
   readonly navigationTarget: TransformNode;
   readonly shadowCasters: AbstractMesh[];
+  readonly visual: ProceduralHumanoid;
 
   constructor(scene: Scene, shadowGenerator: ShadowGenerator, start: Vector3) {
     this.root = new TransformNode('guard-root', scene);
     this.root.position.copyFrom(start);
 
-    const uniformMaterial = new StandardMaterial('guard-uniform-material', scene);
-    uniformMaterial.diffuseColor = new Color3(.065, .095, .13);
-    uniformMaterial.specularColor = new Color3(.22, .28, .34);
-
-    const body = MeshBuilder.CreateCapsule('guard-visual', {
-      height: GUARD_CONFIG.height,
-      radius: GUARD_CONFIG.radius,
-      tessellation: 16,
-    }, scene);
-    body.parent = this.root;
-    body.position.y = GUARD_CONFIG.height / 2;
-    body.material = uniformMaterial;
-    body.receiveShadows = true;
-
-    const capMaterial = new StandardMaterial('guard-cap-material', scene);
-    capMaterial.diffuseColor = new Color3(.035, .05, .07);
-    const cap = MeshBuilder.CreateCylinder('guard-cap', { height: .16, diameter: .68, tessellation: 16 }, scene);
-    cap.parent = this.root;
-    cap.position.y = 1.74;
-    cap.position.z = .04;
-    cap.material = capMaterial;
-    cap.receiveShadows = true;
-
-    const flashlightBodyMaterial = new StandardMaterial('guard-flashlight-body-material', scene);
-    flashlightBodyMaterial.diffuseColor = new Color3(.12, .13, .14);
-    flashlightBodyMaterial.emissiveColor = new Color3(.025, .022, .016);
-    const flashlightBody = MeshBuilder.CreateCylinder('guard-flashlight-body', {
-      height: .38,
-      diameter: .12,
-      tessellation: 12,
-    }, scene);
-    flashlightBody.parent = this.root;
-    flashlightBody.rotation.x = Math.PI / 2;
-    flashlightBody.position = new Vector3(.25, 1.26, .32);
-    flashlightBody.material = flashlightBodyMaterial;
+    this.visual = new ProceduralHumanoid(scene, this.root, shadowGenerator, 'GUARD');
 
     this.flashlightPivot = new TransformNode('guard-flashlight-pivot', scene);
-    this.flashlightPivot.parent = this.root;
-    this.flashlightPivot.position = new Vector3(0, GUARD_CONFIG.flashlight.height, GUARD_CONFIG.flashlight.forwardOffset);
+    this.flashlightPivot.parent = this.visual.flashlightSocket;
+    this.flashlightPivot.position = new Vector3(0, 0, .08);
+    const flashlightMaterial = new StandardMaterial('guard-flashlight-material', scene);
+    flashlightMaterial.diffuseColor = new Color3(.11, .12, .13);
+    flashlightMaterial.specularColor = new Color3(.35, .35, .31);
+    const flashlightBody = MeshBuilder.CreateCylinder('guard-hand-flashlight', { height: .34, diameter: .105, tessellation: 10 }, scene);
+    flashlightBody.parent = this.flashlightPivot;
+    flashlightBody.rotation.x = Math.PI / 2;
+    flashlightBody.position.z = .12;
+    flashlightBody.material = flashlightMaterial;
+    shadowGenerator.addShadowCaster(flashlightBody);
 
     this.detectionOrigin = new TransformNode('guard-detection-origin', scene);
     this.detectionOrigin.parent = this.root;
@@ -66,8 +43,7 @@ export class Guard {
     this.navigationTarget = new TransformNode('guard-navigation-target', scene);
     this.navigationTarget.position.copyFrom(start);
 
-    this.shadowCasters = [body, cap, flashlightBody];
-    this.shadowCasters.forEach(mesh => shadowGenerator.addShadowCaster(mesh));
+    this.shadowCasters = [...this.visual.shadowCasters, flashlightBody];
   }
 
   get position() {

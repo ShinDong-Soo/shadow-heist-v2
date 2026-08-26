@@ -18,6 +18,7 @@ export type GameFlowEffects = {
   setGuardAlert: (active: boolean) => void;
   setCameraCinematic: (active: boolean) => void;
   setCameraAlert: (active: boolean) => void;
+  setCameraEscape: (active: boolean) => void;
   setLockdownThreatStage: (stage: LockdownThreatStage) => void;
   playLockdownTick: (seconds: number) => void;
   playLockdownReleased: () => void;
@@ -26,6 +27,7 @@ export type GameFlowEffects = {
 export class GameFlowManager {
   phase = GamePhase.INFILTRATION;
   hasCrown = false;
+  crownHallDiscovered = false;
   holdProgress = 0;
   announcement = '';
   announcementTone: 'gold' | 'alarm' | 'clear' = 'gold';
@@ -67,10 +69,42 @@ export class GameFlowManager {
     return this.lockdown.debugSetRemaining(5);
   }
 
+  fail(reason = 'CAUGHT BY SECURITY') {
+    if (this.phase === GamePhase.FAILED || this.phase === GamePhase.COMPLETE) return false;
+    this.sequence.reset();
+    this.phase = GamePhase.FAILED;
+    this.holdElapsed = 0;
+    this.holdProgress = 0;
+    this.effects.setPlayerLocked(true);
+    this.effects.setDisplayOpening(false);
+    this.effects.setCameraCinematic(false);
+    this.effects.setCameraAlert(true);
+    this.effects.setCameraEscape(false);
+    this.effects.setAlarm(true);
+    this.showAnnouncement(reason, 'alarm', 3.5);
+    return true;
+  }
+
+  discoverCrownHall() {
+    this.crownHallDiscovered = true;
+  }
+
+  complete() {
+    if (this.phase !== GamePhase.ESCAPE) return false;
+    this.phase = GamePhase.COMPLETE;
+    this.effects.setPlayerLocked(true);
+    this.effects.setCameraAlert(false);
+    this.effects.setCameraEscape(false);
+    this.effects.setAlarm(false);
+    this.showAnnouncement('HEIST COMPLETE', 'clear', 8);
+    return true;
+  }
+
   reset() {
     this.sequence.reset();
     this.phase = GamePhase.INFILTRATION;
     this.hasCrown = false;
+    this.crownHallDiscovered = false;
     this.holdElapsed = 0;
     this.holdProgress = 0;
     this.lockdown.reset();
@@ -85,6 +119,7 @@ export class GameFlowManager {
     this.effects.setGuardAlert(false);
     this.effects.setCameraCinematic(false);
     this.effects.setCameraAlert(false);
+    this.effects.setCameraEscape(false);
     this.effects.setLockdownThreatStage('NONE');
   }
 
@@ -92,10 +127,10 @@ export class GameFlowManager {
     if (this.phase === GamePhase.CROWN_STEAL) return 'SECURING THE CROWN';
     if (this.phase === GamePhase.ALARM) return 'SECURITY BREACH';
     if (this.phase === GamePhase.LOCKDOWN) return 'SURVIVE LOCKDOWN';
-    if (this.phase === GamePhase.ESCAPE) return 'REACH THE EXIT';
+    if (this.phase === GamePhase.ESCAPE) return 'ESCAPE VIA ARCHIVE EAST';
     if (this.phase === GamePhase.COMPLETE) return 'HEIST COMPLETE';
-    if (this.phase === GamePhase.FAILED) return 'HEIST FAILED';
-    return 'STEAL THE CROWN';
+    if (this.phase === GamePhase.FAILED) return 'HEIST FAILED · PRESS R TO RETRY';
+    return this.crownHallDiscovered ? 'STEAL THE CROWN' : 'FIND THE CROWN HALL';
   }
 
   get sequenceTime() {
@@ -158,7 +193,7 @@ export class GameFlowManager {
   }
 
   private readonly handleSequenceCue = (cue: CrownStealCue) => {
-    if (cue === 'TAKE_CROWN') this.effects.beginCrownTake();
+    if (cue === 'CROWN_CONTACT') this.effects.beginCrownTake();
     if (cue === 'CROWN_ACQUIRED') {
       this.hasCrown = true;
       this.effects.commitCrownSteal();
@@ -198,6 +233,7 @@ export class GameFlowManager {
     }
     if (event.type === 'ESCAPE_AVAILABLE') {
       this.phase = GamePhase.ESCAPE;
+      this.effects.setCameraEscape(true);
       this.emitEvent('ESCAPE_AVAILABLE');
       this.showAnnouncement('EXIT UNLOCKED', 'clear', 1.7);
     }

@@ -1,5 +1,5 @@
 export type CrownStealCue =
-  | 'TAKE_CROWN'
+  | 'CROWN_CONTACT'
   | 'CROWN_ACQUIRED'
   | 'SPOTLIGHT_OFF'
   | 'ALARM_START'
@@ -9,7 +9,7 @@ export type CrownStealCue =
   | 'PLAYER_RELEASE';
 
 const CUES: readonly [time: number, cue: CrownStealCue][] = [
-  [0, 'TAKE_CROWN'],
+  [0, 'CROWN_CONTACT'],
   [.3, 'CROWN_ACQUIRED'],
   [.55, 'SPOTLIGHT_OFF'],
   [.75, 'ALARM_START'],

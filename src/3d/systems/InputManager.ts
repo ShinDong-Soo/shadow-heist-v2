@@ -1,9 +1,9 @@
 const MOVEMENT_CODES = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight']);
-const ACTION_CODES = new Set(['KeyE']);
+const ACTION_CODES = new Set(['KeyE', 'ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'KeyC']);
 const TAP_GRACE_MS = 140;
 const KEY_FALLBACKS: Record<string, string> = {
   w: 'KeyW', a: 'KeyA', s: 'KeyS', d: 'KeyD',
-  e: 'KeyE',
+  e: 'KeyE', c: 'KeyC',
   ArrowUp: 'ArrowUp', ArrowLeft: 'ArrowLeft', ArrowDown: 'ArrowDown', ArrowRight: 'ArrowRight',
 };
 
@@ -43,6 +43,14 @@ export class InputManager {
 
   get interactHeld() {
     return this.isDown('KeyE');
+  }
+
+  get runHeld() {
+    return this.isDown('ShiftLeft', 'ShiftRight');
+  }
+
+  get crouchHeld() {
+    return this.isDown('ControlLeft', 'ControlRight', 'KeyC');
   }
 
   clearInteractPress() {

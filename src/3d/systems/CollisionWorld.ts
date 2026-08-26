@@ -1,4 +1,11 @@
-export type CollisionBox = { minX: number; maxX: number; minZ: number; maxZ: number };
+export type CollisionBox = {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+  minY?: number;
+  maxY?: number;
+};
 
 export type CircleMoveResult = {
   x: number;
@@ -14,7 +21,13 @@ export function moveCircleWithSliding(
   deltaZ: number,
   radius: number,
   collisionBoxes: CollisionBox[],
+  moverMinY = 0,
+  moverMaxY = Number.POSITIVE_INFINITY,
 ): CircleMoveResult {
+  const activeCollisionBoxes = collisionBoxes.filter(box => (
+    (box.minY ?? 0) < moverMaxY
+    && (box.maxY ?? Number.POSITIVE_INFINITY) > moverMinY
+  ));
   const distance = Math.hypot(deltaX, deltaZ);
   const stepCount = Math.max(1, Math.ceil(distance / (radius * .45)));
   const stepX = deltaX / stepCount;
@@ -25,11 +38,11 @@ export function moveCircleWithSliding(
   let blockedZ = false;
 
   for (let step = 0; step < stepCount; step += 1) {
-    const safeX = findSafeAxisPosition(x, stepX, z, true, radius, collisionBoxes);
+    const safeX = findSafeAxisPosition(x, stepX, z, true, radius, activeCollisionBoxes);
     blockedX ||= Math.abs(safeX - (x + stepX)) > .00001;
     x = safeX;
 
-    const safeZ = findSafeAxisPosition(z, stepZ, x, false, radius, collisionBoxes);
+    const safeZ = findSafeAxisPosition(z, stepZ, x, false, radius, activeCollisionBoxes);
     blockedZ ||= Math.abs(safeZ - (z + stepZ)) > .00001;
     z = safeZ;
   }
@@ -71,4 +84,19 @@ function circleOverlapsBox(x: number, z: number, radius: number, box: CollisionB
   const dx = x - closestX;
   const dz = z - closestZ;
   return dx * dx + dz * dz < radius * radius;
+}
+
+export function canOccupyCircle(
+  x: number,
+  z: number,
+  radius: number,
+  collisionBoxes: CollisionBox[],
+  moverMinY = 0,
+  moverMaxY = Number.POSITIVE_INFINITY,
+) {
+  return !collisionBoxes.some(box => (
+    (box.minY ?? 0) < moverMaxY
+    && (box.maxY ?? Number.POSITIVE_INFINITY) > moverMinY
+    && circleOverlapsBox(x, z, radius, box)
+  ));
 }
