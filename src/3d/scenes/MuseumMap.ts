@@ -1,5 +1,6 @@
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
+import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
@@ -21,6 +22,8 @@ export class MuseumMap {
   readonly archiveLockerPosition = new Vector3(-5.65, 0, -14.2);
   private readonly shortcutGate: Mesh;
   private readonly shortcutLampMaterial: StandardMaterial;
+  private readonly shortcutThresholdMaterial: StandardMaterial;
+  private readonly shortcutSignTexture: DynamicTexture;
   private readonly escapeGuideMaterial: StandardMaterial;
   private readonly escapeGuideMeshes: AbstractMesh[] = [];
   private readonly alarmMaterials: StandardMaterial[] = [];
@@ -196,14 +199,53 @@ export class MuseumMap {
     }
 
     this.shortcutLampMaterial = material('museum-shortcut-lamp', new Color3(.08, .18, .14), new Color3(.015, .08, .045));
+    this.shortcutThresholdMaterial = material('museum-shortcut-threshold', new Color3(.12, .025, .018), new Color3(.22, .012, .005));
     this.escapeGuideMaterial = material('museum-escape-guide', new Color3(.025, .22, .14), Color3.Black());
+
+    // A permanent industrial frame makes this read as a doorway even before
+    // Escape starts. The old version only showed a thin green box after the
+    // shortcut opened, so players could not tell whether a door existed.
+    addVisualBox('museum-shortcut-frame-north', 7.03, 1.45, MUSEUM_MAP_CONFIG.shortcutDoor.z - 1.28, .38, 2.9, .24, serviceBlue);
+    addVisualBox('museum-shortcut-frame-south', 7.03, 1.45, MUSEUM_MAP_CONFIG.shortcutDoor.z + 1.28, .38, 2.9, .24, serviceBlue);
+    addVisualBox('museum-shortcut-frame-top', 7.03, 2.82, MUSEUM_MAP_CONFIG.shortcutDoor.z, .38, .25, 2.8, serviceBlue);
+    const shortcutThreshold = MeshBuilder.CreateBox('museum-shortcut-threshold-strip', { width: 1.2, height: .025, depth: 2.18 }, scene);
+    shortcutThreshold.position.copyFromFloats(7.35, .04, MUSEUM_MAP_CONFIG.shortcutDoor.z);
+    shortcutThreshold.material = this.shortcutThresholdMaterial;
+    shortcutThreshold.isPickable = false;
+    staticMeshes.push(shortcutThreshold);
+
     this.shortcutGate = MeshBuilder.CreateBox('museum-shortcut-lockdown-gate', { width: .18, height: 2.65, depth: 2.35 }, scene);
     this.shortcutGate.position.copyFromFloats(7.05, 1.325, MUSEUM_MAP_CONFIG.shortcutDoor.z);
     this.shortcutGate.material = darkMetal;
     this.shortcutGate.metadata = { blocksVision: true, dynamicGate: true };
+    for (const [index, y] of [-.82, -.41, 0, .41, .82].entries()) {
+      const shutterBar = MeshBuilder.CreateBox(`museum-shortcut-shutter-bar-${index}`, { width: .08, height: .075, depth: 2.12 }, scene);
+      shutterBar.parent = this.shortcutGate;
+      shutterBar.position.copyFromFloats(-.13, y, 0);
+      shutterBar.material = this.shortcutLampMaterial;
+      shutterBar.isPickable = false;
+    }
     const shortcutLamp = MeshBuilder.CreateBox('museum-shortcut-status', { width: .1, height: .18, depth: .3 }, scene);
     shortcutLamp.position.copyFromFloats(6.9, 2.35, MUSEUM_MAP_CONFIG.shortcutDoor.z - 1.25);
     shortcutLamp.material = this.shortcutLampMaterial;
+
+    this.shortcutSignTexture = new DynamicTexture('museum-shortcut-exit-sign-texture', { width: 512, height: 192 }, scene, false);
+    const shortcutSignMaterial = new StandardMaterial('museum-shortcut-exit-sign-material', scene);
+    shortcutSignMaterial.diffuseTexture = this.shortcutSignTexture;
+    shortcutSignMaterial.emissiveTexture = this.shortcutSignTexture;
+    shortcutSignMaterial.emissiveColor = Color3.White();
+    shortcutSignMaterial.backFaceCulling = false;
+    shortcutSignMaterial.disableLighting = true;
+    const shortcutSign = MeshBuilder.CreatePlane('museum-shortcut-exit-sign', { width: 2.4, height: .9 }, scene);
+    // Use a floor stencil just before the frame. An east-facing wall is almost
+    // edge-on to the fixed camera, and an overhead sign overlaps the objective
+    // HUD. The floor marking remains readable and points at the real opening.
+    shortcutSign.position.copyFromFloats(6.05, .058, MUSEUM_MAP_CONFIG.shortcutDoor.z);
+    shortcutSign.rotation.x = Math.PI / 2;
+    shortcutSign.material = shortcutSignMaterial;
+    shortcutSign.isPickable = false;
+    staticMeshes.push(shortcutSign);
+    this.drawShortcutSign(false);
     collisionBoxes.push(this.shortcutCollision);
     this.applyShortcutProgress();
 
@@ -230,10 +272,6 @@ export class MuseumMap {
     [-22, -25, -28, -31, -34, -37, -40, -43, -46, -48].forEach((z, index) => {
       addEscapeGuide(index + eastGuides.length, 8.5, z, Math.PI / 2);
     });
-    const shortcutSign = addVisualBox('museum-shortcut-exit-sign', 6.88, 2.3, -18.5, .08, .62, 1.65, this.escapeGuideMaterial);
-    shortcutSign.setEnabled(false);
-    this.escapeGuideMeshes.push(shortcutSign);
-
     // The exit is visible from far down the service corridor.
     addVisualBox('museum-exit-frame-top', 8.5, 2.55, -49.6, 2.8, .24, .3, serviceBlue);
     addVisualBox('museum-exit-frame-left', 7.18, 1.35, -49.6, .22, 2.55, .3, serviceBlue);
@@ -275,6 +313,9 @@ export class MuseumMap {
   setShortcutOpen(open: boolean) {
     this.shortcutOpen = open;
     this.shortcutLampMaterial.emissiveColor.copyFrom(open ? new Color3(.02, .5, .22) : new Color3(.22, .018, .006));
+    this.shortcutThresholdMaterial.diffuseColor.copyFrom(open ? new Color3(.025, .24, .14) : new Color3(.12, .025, .018));
+    this.shortcutThresholdMaterial.emissiveColor.copyFrom(open ? new Color3(.025, .58, .3) : new Color3(.22, .012, .005));
+    this.drawShortcutSign(open);
     this.escapeGuideMeshes.forEach(mesh => mesh.setEnabled(open));
     if (!open) this.escapeGuideMaterial.emissiveColor.setAll(0);
   }
@@ -293,6 +334,9 @@ export class MuseumMap {
     this.shortcutProgress = 0;
     this.setAlarmActive(false);
     this.shortcutLampMaterial.emissiveColor.copyFromFloats(.22, .018, .006);
+    this.shortcutThresholdMaterial.diffuseColor.copyFromFloats(.12, .025, .018);
+    this.shortcutThresholdMaterial.emissiveColor.copyFromFloats(.22, .012, .005);
+    this.drawShortcutSign(false);
     this.escapeGuideMaterial.emissiveColor.setAll(0);
     this.escapeGuideMeshes.forEach(mesh => mesh.setEnabled(false));
     this.applyShortcutProgress();
@@ -315,5 +359,23 @@ export class MuseumMap {
       this.shortcutCollision.minZ = 999;
       this.shortcutCollision.maxZ = 999;
     }
+  }
+
+  private drawShortcutSign(open: boolean) {
+    const context = this.shortcutSignTexture.getContext() as unknown as CanvasRenderingContext2D;
+    context.fillStyle = '#071411';
+    context.fillRect(0, 0, 512, 192);
+    context.strokeStyle = open ? '#52f0a4' : '#9d4a3e';
+    context.lineWidth = 8;
+    context.strokeRect(5, 5, 502, 182);
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.font = '700 52px Arial';
+    context.fillStyle = '#e6f4ef';
+    context.fillText('EMERGENCY EXIT', 256, 70);
+    context.font = '800 44px Arial';
+    context.fillStyle = open ? '#52f0a4' : '#ff6d5d';
+    context.fillText(open ? 'OPEN' : 'LOCKED', 256, 138);
+    this.shortcutSignTexture.update();
   }
 }

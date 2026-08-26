@@ -84,7 +84,7 @@
             </select>
             <button id="fullscreen3D" type="button" class="quiet">FULLSCREEN</button>
           </div>
-          <small>WASD 이동 · SHIFT 달리기 · CTRL 웅크리기 · E 상호작용 · ESC 일시정지</small>
+          <small>WASD 이동 · 우클릭 좌우 드래그 카메라 · SHIFT 달리기 · CTRL 웅크리기 · E 상호작용 · ESC 일시정지</small>
         </div>
       </section>
       <section id="pause3D" class="terminal-screen-3d hidden" aria-label="일시정지 메뉴">
@@ -132,12 +132,13 @@
       <section class="prototype-3d-guide" aria-label="조작 안내">
         <div class="guide-primary">
           <span>WASD</span> 이동
+          <span>RMB DRAG</span> 카메라
           <span>SHIFT</span> 달리기
           <span>CTRL / C</span> 웅크리기
           <span>HOLD E</span> 상호작용
           <span>ESC</span> 일시정지
         </div>
-        <details>
+        <details id="testKeys3D" hidden>
           <summary>TEST KEYS</summary>
           <div>
             <span>1·2·3</span> 카메라
@@ -161,7 +162,6 @@
           </div>
         </details>
       </section>
-      <a class="back-to-game" href="./">← 2D PROTOTYPE</a>
     </main>
     <script type="module" src="/src/3d/main.ts"></script>
   </body>

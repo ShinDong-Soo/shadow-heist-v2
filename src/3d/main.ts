@@ -65,6 +65,12 @@ const resultBadge = document.querySelector<HTMLElement>('#resultBadge3D');
 const resultBest = document.querySelector<HTMLElement>('#resultBest3D');
 const retry = document.querySelector<HTMLButtonElement>('#retry3D');
 const resultMenu = document.querySelector<HTMLButtonElement>('#resultMenu3D');
+const testKeys = document.querySelector<HTMLDetailsElement>('#testKeys3D');
+
+// Test shortcuts are a development aid, not part of the submitted game HUD.
+// The element stays hidden in production HTML and is only revealed by Vite's
+// development build.
+if (import.meta.env.DEV) testKeys?.removeAttribute('hidden');
 
 if (!canvas || !root || !debug || !loading || !loadingProgress || !loadingStatus || !loadingPercent || !fps || !camera || !meshCount || !movement || !position || !guard || !guardB || !flashlight || !vision || !detection || !detectionFill || !detectionValue || !crown || !flow || !map || !phasePerf || !objective || !interaction || !interactionLabel || !interactionFill || !lockdown || !phase || !timer || !gateState || !announcement || !alarmOverlay || !hideOverlay || !hideAwareness || !exitMarker || !zone || !loot || !menu || !play || !quality || !fullscreen || !pause || !resume || !restart || !pauseMenu || !confirm || !confirmRestart || !cancelRestart || !result || !resultPanel || !resultTitle || !resultRank || !resultReason || !resultCrown || !resultLoot || !resultDetected || !resultChases || !resultTime || !resultScore || !resultBadge || !resultBest || !retry || !resultMenu) {
   throw new Error('Babylon 3D bootstrap elements are missing.');

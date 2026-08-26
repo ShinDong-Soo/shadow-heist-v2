@@ -15,12 +15,16 @@ export class GuardFlashlight {
   readonly shadowGenerator: ShadowGenerator;
   private elapsed = 0;
 
-  constructor(scene: Scene, private readonly guard: Guard) {
+  constructor(scene: Scene, private readonly guard: Guard, id: string) {
     const config = GUARD_CONFIG.flashlight;
     const direction = new Vector3(0, config.pitch, 1).normalize();
-    this.light = new SpotLight('guard-flashlight', Vector3.Zero(), direction, config.angle, config.exponent, scene);
+    this.light = new SpotLight(`guard-flashlight-${id}`, Vector3.Zero(), direction, config.angle, config.exponent, scene);
     this.light.range = config.range;
     this.light.intensity = config.intensity;
+    // The museum also contains ambient, crown, CCTV and alarm lights. Give the
+    // moving gameplay light a higher priority so Babylon keeps it in the
+    // material's active light set when several lights overlap the same room.
+    this.light.renderPriority = 20;
     this.light.diffuse = new Color3(1, .87, .64);
     this.light.specular = new Color3(.7, .57, .38);
 

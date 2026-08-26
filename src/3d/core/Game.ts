@@ -228,12 +228,12 @@ export class Game {
       event.preventDefault();
       this.prototype.setupShelfLosTest();
     }
-    if (event.code === 'F1') {
+    if (event.code === 'F1' && GAME_3D_CONFIG.debug) {
       event.preventDefault();
       this.debugVisualsVisible = !this.debugVisualsVisible;
       this.prototype.setDebugVisible(this.debugVisualsVisible);
     }
-    if (event.code === 'F2') {
+    if (event.code === 'F2' && GAME_3D_CONFIG.debug) {
       event.preventDefault();
       this.debugPanelVisible = !this.debugPanelVisible;
       this.ui.debug.classList.toggle('hidden', !this.debugPanelVisible);
@@ -530,7 +530,11 @@ export class Game {
       this.ui.objective.textContent = gameFlow.objective;
     }
 
-    const lockdownVisible = gameFlow.phase === 'ALARM' || gameFlow.phase === 'LOCKDOWN' || gameFlow.phase === 'ESCAPE';
+    const escaping = gameFlow.phase === 'ESCAPE';
+    // Once the shutter is open, the large countdown panel no longer contains
+    // actionable information. Remove it from the playfield and compact the
+    // remaining objective into the left-side mission stack.
+    const lockdownVisible = gameFlow.phase === 'ALARM' || gameFlow.phase === 'LOCKDOWN';
     this.ui.lockdown.classList.toggle('visible', lockdownVisible);
     this.ui.lockdown.classList.toggle('urgent', gameFlow.phase === 'LOCKDOWN' && gameFlow.lockdownRemaining <= 5);
     this.ui.phase.textContent = gameFlow.phase;
@@ -539,7 +543,8 @@ export class Game {
       : gameFlow.phase === 'ALARM' ? 'ALERT' : 'OPEN';
     this.ui.gateState.textContent = `GATE ${securityGate.state}`;
     this.ui.alarmOverlay.classList.toggle('active', alarm.active);
-    this.ui.exitMarker.classList.toggle('visible', gameFlow.phase === 'ESCAPE');
+    this.ui.exitMarker.classList.toggle('visible', escaping);
+    this.ui.root.classList.toggle('escape-active', escaping);
     const hidden = hideController.state === 'HIDDEN';
     this.ui.root.classList.toggle('hide-active', hidden);
     this.ui.hideOverlay.classList.toggle('visible', hidden);

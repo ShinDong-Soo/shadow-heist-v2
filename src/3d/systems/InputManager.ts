@@ -11,6 +11,9 @@ export class InputManager {
   private readonly pressed = new Set<string>();
   private readonly justPressed = new Set<string>();
   private readonly activeUntil = new Map<string, number>();
+  private cameraOrbitHeld = false;
+  private cameraDragDelta = 0;
+  private lastPointerX = 0;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     // Capture on document instead of relying only on window bubbling. This
@@ -19,7 +22,11 @@ export class InputManager {
     document.addEventListener('keyup', this.handleKeyUp, true);
     window.addEventListener('blur', this.reset);
     document.addEventListener('visibilitychange', this.handleVisibility);
-    canvas.addEventListener('pointerdown', this.focusCanvas);
+    canvas.addEventListener('pointerdown', this.handlePointerDown);
+    canvas.addEventListener('contextmenu', this.preventContextMenu);
+    window.addEventListener('pointermove', this.handlePointerMove);
+    window.addEventListener('pointerup', this.handlePointerUp);
+    window.addEventListener('pointercancel', this.handlePointerUp);
   }
 
   get horizontal() {
@@ -28,6 +35,16 @@ export class InputManager {
 
   get vertical() {
     return Number(this.isDown('KeyW', 'ArrowUp')) - Number(this.isDown('KeyS', 'ArrowDown'));
+  }
+
+  consumeCameraTurn() {
+    const delta = this.cameraDragDelta;
+    this.cameraDragDelta = 0;
+    return delta;
+  }
+
+  get isCameraOrbiting() {
+    return this.cameraOrbitHeld;
   }
 
   get activeLabel() {
@@ -86,7 +103,32 @@ export class InputManager {
     return fallback && (MOVEMENT_CODES.has(fallback) || ACTION_CODES.has(fallback)) ? fallback : null;
   }
 
-  private readonly focusCanvas = () => this.canvas.focus({ preventScroll: true });
+  private readonly handlePointerDown = (event: PointerEvent) => {
+    this.canvas.focus({ preventScroll: true });
+    if (event.button !== 2) return;
+    event.preventDefault();
+    this.cameraOrbitHeld = true;
+    this.cameraDragDelta = 0;
+    this.lastPointerX = event.clientX;
+  };
+
+  private readonly handlePointerMove = (event: PointerEvent) => {
+    if (!this.cameraOrbitHeld) return;
+    if ((event.buttons & 2) === 0) {
+      this.cameraOrbitHeld = false;
+      return;
+    }
+    this.cameraDragDelta += event.clientX - this.lastPointerX;
+    this.lastPointerX = event.clientX;
+  };
+
+  private readonly handlePointerUp = (event: PointerEvent) => {
+    if (event.button === 2 || event.type === 'pointercancel') {
+      this.cameraOrbitHeld = false;
+    }
+  };
+
+  private readonly preventContextMenu = (event: MouseEvent) => event.preventDefault();
 
   private readonly handleVisibility = () => {
     if (document.hidden) this.reset();
@@ -96,6 +138,8 @@ export class InputManager {
     this.pressed.clear();
     this.justPressed.clear();
     this.activeUntil.clear();
+    this.cameraOrbitHeld = false;
+    this.cameraDragDelta = 0;
   };
 
   dispose() {
@@ -103,7 +147,11 @@ export class InputManager {
     document.removeEventListener('keyup', this.handleKeyUp, true);
     window.removeEventListener('blur', this.reset);
     document.removeEventListener('visibilitychange', this.handleVisibility);
-    this.canvas.removeEventListener('pointerdown', this.focusCanvas);
+    this.canvas.removeEventListener('pointerdown', this.handlePointerDown);
+    this.canvas.removeEventListener('contextmenu', this.preventContextMenu);
+    window.removeEventListener('pointermove', this.handlePointerMove);
+    window.removeEventListener('pointerup', this.handlePointerUp);
+    window.removeEventListener('pointercancel', this.handlePointerUp);
     this.reset();
   }
 }

@@ -23,6 +23,7 @@ export class GameCamera {
   private cinematicMode = false;
   private hideMode = false;
   private escapeMode = false;
+  private targetAlpha = GAME_3D_CONFIG.camera.alpha;
   private readonly hideFocus = Vector3.Zero();
 
   constructor(scene: Scene, private readonly player: Player) {
@@ -40,7 +41,7 @@ export class GameCamera {
     scene.activeCamera = this.camera;
   }
 
-  update(deltaTime: number, movementDirection: Vector3, speed: number) {
+  update(deltaTime: number, movementDirection: Vector3, speed: number, cameraDragDelta = 0) {
     const baseRadius = GAME_3D_CONFIG.camera.distancePresets[this.distanceMode];
     const cameraBlend = 1 - Math.exp(-(this.hideMode ? 7 : 5) * deltaTime);
     const radiusBonus = this.escapeMode
@@ -52,7 +53,14 @@ export class GameCamera {
     this.camera.radius += (targetRadius - this.camera.radius) * cameraBlend;
     const targetBeta = this.hideMode ? Math.PI / 2 : GAME_3D_CONFIG.camera.beta;
     this.camera.beta += (targetBeta - this.camera.beta) * cameraBlend;
-    const targetAlpha = this.hideMode ? Math.PI / 2 : GAME_3D_CONFIG.camera.alpha;
+    // A drag delta is only produced while RMB is held. Consume it even when
+    // the button was released between two frames so a quick flick is not lost.
+    if (!this.hideMode && cameraDragDelta !== 0) {
+      this.targetAlpha = Scalar.NormalizeRadians(
+        this.targetAlpha - cameraDragDelta * GAME_3D_CONFIG.camera.orbitDragSensitivity,
+      );
+    }
+    const targetAlpha = this.hideMode ? Math.PI / 2 : this.targetAlpha;
     this.camera.alpha += Scalar.NormalizeRadians(targetAlpha - this.camera.alpha) * cameraBlend;
     const targetFov = this.hideMode ? 58 * Math.PI / 180 : GAME_3D_CONFIG.camera.fov;
     this.camera.fov += (targetFov - this.camera.fov) * cameraBlend;
@@ -127,6 +135,9 @@ export class GameCamera {
   }
 
   setEscapeMode(active: boolean) {
+    if (active !== this.escapeMode) {
+      this.targetAlpha = active ? GAME_3D_CONFIG.camera.escapeAlpha : GAME_3D_CONFIG.camera.alpha;
+    }
     this.escapeMode = active;
     if (!active) this.lookAheadOffset.setAll(0);
   }
@@ -139,6 +150,7 @@ export class GameCamera {
 
   reset() {
     this.camera.alpha = GAME_3D_CONFIG.camera.alpha;
+    this.targetAlpha = GAME_3D_CONFIG.camera.alpha;
     this.camera.beta = GAME_3D_CONFIG.camera.beta;
     this.setDistance('medium');
     this.camera.radius = GAME_3D_CONFIG.camera.distancePresets.medium;

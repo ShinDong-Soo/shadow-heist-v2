@@ -85,15 +85,18 @@ export class PlayerAnimationController {
     const crouched = this.state === 'CROUCH' || this.state === 'CROUCH_WALK';
     const cycle = moving ? Math.sin(this.locomotionPhase) : 0;
     const stepLift = moving ? Math.max(0, Math.sin(this.locomotionPhase * 2)) : 0;
-    const legSwing = cycle * (run ? .78 : crouched ? .34 : .52);
+    const legSwing = cycle * (run ? .78 : crouched ? .13 : .52);
     const armSwing = -cycle * (run ? .72 : crouched ? .18 : .3);
     const breath = Math.sin(this.elapsed * 2.15) * .012;
     const blend = 1 - Math.exp(-deltaTime / .16);
     const pose = (current: number, target: number) => Scalar.Lerp(current, target, blend);
 
-    let rootY = crouched ? -.22 : 0;
-    let rootPitch = run ? .2 : crouched ? .22 : moving ? .06 : .025;
-    let chestPitch = run ? .12 : crouched ? .18 : 0;
+    // Crouching is a compact squat, not a standing forward bend. Lowering the
+    // whole visual and folding both leg joints produces a readable seated
+    // silhouette from the high top-down camera.
+    let rootY = crouched ? -.42 + stepLift * .018 : 0;
+    let rootPitch = run ? .2 : crouched ? .045 : moving ? .06 : .025;
+    let chestPitch = run ? .12 : crouched ? .09 : 0;
     let leftArmX = armSwing;
     let rightArmX = -armSwing;
     let leftForearmX = run ? -.38 : -.12;
@@ -105,10 +108,14 @@ export class PlayerAnimationController {
     let headYaw = Math.sin(this.elapsed * .72) * (this.state === 'IDLE' ? .14 : .035);
 
     if (crouched) {
-      leftLegX = -.36 + legSwing;
-      rightLegX = -.36 - legSwing;
-      leftShinX = .76 + (moving ? Math.max(0, -cycle) * .18 : 0);
-      rightShinX = .76 + (moving ? Math.max(0, cycle) * .18 : 0);
+      leftArmX = -.24 + armSwing;
+      rightArmX = -.24 - armSwing;
+      leftForearmX = -.42;
+      rightForearmX = -.42;
+      leftLegX = -1.02 + legSwing;
+      rightLegX = -1.02 - legSwing;
+      leftShinX = 1.88 + (moving ? Math.max(0, -cycle) * .12 : 0);
+      rightShinX = 1.88 + (moving ? Math.max(0, cycle) * .12 : 0);
     }
 
     if (this.state === 'INTERACT') {

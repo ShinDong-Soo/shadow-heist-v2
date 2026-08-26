@@ -304,14 +304,14 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
   ];
   const guardPatrol = new GuardPatrol(MUSEUM_MAP_CONFIG.guardA.normal);
   const guard = new Guard(scene, shadowGenerator, guardPatrol.start);
-  const guardFlashlight = new GuardFlashlight(scene, guard);
+  const guardFlashlight = new GuardFlashlight(scene, guard, 'west');
   const guardController = new GuardController(guard, guardPatrol, guardFlashlight, collisionBoxes, MUSEUM_MAP_CONFIG.guardA);
   const guardHearing = new GuardHearing(guard);
   const guardDebug = new GuardDebugView(scene, guard, guardPatrol);
   const guardVision = new GuardVision(scene, guard, guardFlashlight, player);
   const guardBPatrol = new GuardPatrol(MUSEUM_MAP_CONFIG.guardB.normal);
   const guardB = new Guard(scene, shadowGenerator, guardBPatrol.start);
-  const guardBFlashlight = new GuardFlashlight(scene, guardB);
+  const guardBFlashlight = new GuardFlashlight(scene, guardB, 'east');
   const guardBController = new GuardController(guardB, guardBPatrol, guardBFlashlight, collisionBoxes, MUSEUM_MAP_CONFIG.guardB);
   const guardBHearing = new GuardHearing(guardB);
   const guardBDebug = new GuardDebugView(scene, guardB, guardBPatrol);
@@ -447,6 +447,15 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
   // Babylon primitives and needs no runtime GLB request.
   const loadedModel: AbstractMesh | null = null;
   onProgress(.92, 'MUSEUM AND LOCKDOWN ASSETS READY');
+
+  // StandardMaterial renders only four simultaneous lights by default. This
+  // scene can overlap ambient + key + crown/CCTV + two guard flashlights, so
+  // the second guard's beam could silently disappear. Eight keeps both
+  // gameplay flashlights visible while remaining below Babylon's common WebGL
+  // light limit and only affects meshes inside each light's range.
+  scene.materials.forEach(material => {
+    if (material instanceof StandardMaterial) material.maxSimultaneousLights = 8;
+  });
 
   // Static museum geometry never changes its transform. Freezing those world
   // matrices removes repeated transform work while player, guard, debug and
@@ -594,7 +603,7 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
       }
       const nearestGuard = Vector3.DistanceSquared(guard.position, player.position) <= Vector3.DistanceSquared(guardB.position, player.position) ? guard : guardB;
       stealthAudio.update(deltaTime, nearestGuard.position, player.position, hideController.state === 'HIDDEN', hideController.tension);
-      cameraRig.update(deltaTime, controller.direction, controller.speed);
+      cameraRig.update(deltaTime, controller.direction, controller.speed, input.consumeCameraTurn());
     },
     setCameraDistance: mode => cameraRig.setDistance(mode),
     setDebugVisible: visible => {

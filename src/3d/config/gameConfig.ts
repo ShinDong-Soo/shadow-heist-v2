@@ -1,5 +1,7 @@
 export const GAME_3D_CONFIG = {
-  debug: true,
+  // Debug panels, teleports and test shortcuts must never ship enabled in the
+  // competition build. `npm run dev` keeps them available for development.
+  debug: import.meta.env.DEV,
   units: {
     metersPerUnit: 1,
     referenceCharacterHeight: 1.75,
@@ -9,6 +11,10 @@ export const GAME_3D_CONFIG = {
     // The full museum is arranged south-to-north. A cardinal camera keeps W
     // aligned with the visible route, so navigation never becomes the puzzle.
     alpha: -Math.PI / 2,
+    // Escape travels back toward the south. Rotate the view so the route is
+    // revealed ahead, then let the player fine-tune it with RMB drag.
+    escapeAlpha: Math.PI / 2,
+    orbitDragSensitivity: .006,
     beta: .72,
     fov: 50 * Math.PI / 180,
     targetHeight: .92,
