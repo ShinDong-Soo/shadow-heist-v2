@@ -15,17 +15,17 @@ export type GraphicsQualityProfile = {
 
 const STORAGE_KEY = 'shadow-heist-v2-quality-v1';
 const PROFILES: Record<GraphicsQuality, GraphicsQualityProfile> = {
-  LOW: {
+    LOW: {
     label: 'LOW', hardwareScalingLevel: 1.6, minHardwareScalingLevel: 1.45, maxHardwareScalingLevel: 1.9,
-    keyShadowMapSize: 512, flashlightShadowMapSize: 256, farAnimationInterval: .12, alarmLightMultiplier: .65,
+    keyShadowMapSize: 512, flashlightShadowMapSize: 512, farAnimationInterval: .12, alarmLightMultiplier: .65,
   },
   MEDIUM: {
     label: 'MEDIUM', hardwareScalingLevel: 1.25, minHardwareScalingLevel: 1.15, maxHardwareScalingLevel: 1.55,
-    keyShadowMapSize: 512, flashlightShadowMapSize: 256, farAnimationInterval: .075, alarmLightMultiplier: .82,
+    keyShadowMapSize: 512, flashlightShadowMapSize: 512, farAnimationInterval: .075, alarmLightMultiplier: .82,
   },
   HIGH: {
     label: 'HIGH', hardwareScalingLevel: 1, minHardwareScalingLevel: 1, maxHardwareScalingLevel: 1.35,
-    keyShadowMapSize: 1024, flashlightShadowMapSize: 512, farAnimationInterval: .05, alarmLightMultiplier: 1,
+    keyShadowMapSize: 1024, flashlightShadowMapSize: 1024, farAnimationInterval: .05, alarmLightMultiplier: 1,
   },
 };
 

@@ -26,20 +26,37 @@ export class GuardFlashlight {
     this.light.renderPriority = 20;
     this.light.diffuse = new Color3(1, .87, .64);
     this.light.specular = new Color3(.7, .57, .38);
+    // Tight near/far planes keep depth precision high enough for thin museum
+    // walls. Without these, SpotLight shadows smear and light bleeds through.
+    this.light.shadowMinZ = .12;
+    this.light.shadowMaxZ = config.range;
 
-    this.shadowGenerator = new ShadowGenerator(getQualityProfile().flashlightShadowMapSize, this.light);
-    this.shadowGenerator.usePoissonSampling = true;
-    // Smaller offsets reduce visible light leaking around thick Crown Hall
-    // walls while keeping the low-cost 512px shadow map.
-    this.shadowGenerator.bias = .0004;
-    this.shadowGenerator.normalBias = .012;
+    const mapSize = Math.max(config.shadowMapSize, getQualityProfile().flashlightShadowMapSize);
+    this.shadowGenerator = new ShadowGenerator(mapSize, this.light);
+    this.shadowGenerator.usePercentageCloserFiltering = true;
+    this.shadowGenerator.filteringQuality = ShadowGenerator.QUALITY_MEDIUM;
+    // Back-face depth only is much more stable on .28-.42m cutaway walls than
+    // dual-face sampling, which otherwise lets the beam punch through.
+    this.shadowGenerator.forceBackFacesOnly = true;
+    this.shadowGenerator.bias = .001;
+    this.shadowGenerator.normalBias = .035;
+    this.shadowGenerator.darkness = 0;
     const shadowMap = this.shadowGenerator.getShadowMap();
-    if (shadowMap) shadowMap.refreshRate = config.shadowRefreshRate;
+    if (shadowMap) {
+      // Moving lights need a fresh depth map every frame or the previous cone
+      // keeps lighting floors that are already behind a wall.
+      shadowMap.refreshRate = 1;
+    }
     this.syncTransform();
   }
 
   setShadowCasters(meshes: AbstractMesh[]) {
-    meshes.forEach(mesh => this.shadowGenerator.addShadowCaster(mesh));
+    meshes.forEach(mesh => {
+      this.shadowGenerator.addShadowCaster(mesh, false);
+      // Frozen museum walls can otherwise drop out of the light-space pass
+      // when the main camera no longer sees them, letting the beam continue.
+      mesh.alwaysSelectAsActiveMesh = true;
+    });
   }
 
   update(deltaTime: number, moving: boolean, mode: GuardFlashlightMode = 'PATROL') {
@@ -53,7 +70,9 @@ export class GuardFlashlight {
           ? 1.08
           : 1;
     const lightBlend = 1 - Math.exp(-7 * deltaTime);
-    this.light.range += (config.range * rangeMultiplier - this.light.range) * lightBlend;
+    const targetRange = config.range * rangeMultiplier;
+    this.light.range += (targetRange - this.light.range) * lightBlend;
+    this.light.shadowMaxZ = this.light.range;
     const intensityMultiplier = mode === 'PATROL' ? 1 : config.warningIntensityMultiplier;
     this.light.intensity += (config.intensity * intensityMultiplier - this.light.intensity) * lightBlend;
     const alertAmount = mode === 'ALERT' ? GUARD_CONFIG.flashlight.alertSwayMultiplier : 1;
@@ -80,6 +99,7 @@ export class GuardFlashlight {
   reset() {
     this.elapsed = 0;
     this.light.range = GUARD_CONFIG.flashlight.range;
+    this.light.shadowMaxZ = GUARD_CONFIG.flashlight.range;
     this.light.intensity = GUARD_CONFIG.flashlight.intensity;
     this.guard.flashlightPivot.rotation.setAll(0);
     this.syncTransform();

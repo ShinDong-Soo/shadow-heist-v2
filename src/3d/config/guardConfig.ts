@@ -31,7 +31,7 @@ export const GUARD_CONFIG = {
     swayHorizontal: .026,
     swayVertical: .018,
     alertSwayMultiplier: 2.5,
-    shadowMapSize: 256,
-    shadowRefreshRate: 2,
+    shadowMapSize: 512,
+    shadowRefreshRate: 1,
   },
 } as const;

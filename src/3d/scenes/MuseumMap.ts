@@ -58,6 +58,16 @@ export class MuseumMap {
     const shelf = material('museum-archive-shelf', new Color3(.12, .2, .21));
     const securityRed = material('museum-security-red', new Color3(.22, .018, .012), new Color3(.035, .002, .001));
     const serviceBlue = material('museum-service-blue', new Color3(.045, .16, .18), new Color3(.004, .028, .032));
+    // Camera cutaways stay waist-high, but the flashlight must still treat them
+    // as full-height occluders or the beam continues onto the next room's floor.
+    const flashlightOccluderHeight = 3.15;
+    let flashlightOccluderMaterial = scene.getMaterialByName('museum-flashlight-occluder') as StandardMaterial | null;
+    if (!flashlightOccluderMaterial) {
+      flashlightOccluderMaterial = new StandardMaterial('museum-flashlight-occluder', scene);
+      flashlightOccluderMaterial.disableColorWrite = true;
+      flashlightOccluderMaterial.disableDepthWrite = true;
+      flashlightOccluderMaterial.backFaceCulling = false;
+    }
 
     const staticMeshes: AbstractMesh[] = [];
     const addFloor = (name: string, x: number, z: number, width: number, depth: number, floorMaterial: StandardMaterial) => {
@@ -67,6 +77,22 @@ export class MuseumMap {
       mesh.receiveShadows = true;
       staticMeshes.push(mesh);
       return mesh;
+    };
+    const addFlashlightOccluder = (name: string, x: number, z: number, width: number, depth: number, visualHeight: number) => {
+      if (visualHeight >= flashlightOccluderHeight - .05) return;
+      const occluder = MeshBuilder.CreateBox(name, {
+        width: Math.max(width, .34),
+        depth: Math.max(depth, .34),
+        height: flashlightOccluderHeight,
+      }, scene);
+      occluder.position.copyFromFloats(x, flashlightOccluderHeight / 2, z);
+      occluder.material = flashlightOccluderMaterial!;
+      occluder.isPickable = false;
+      occluder.receiveShadows = false;
+      occluder.alwaysSelectAsActiveMesh = true;
+      occluder.metadata = { flashlightOccluder: true, museumStatic: true };
+      staticMeshes.push(occluder);
+      return occluder;
     };
     const addBox = (
       name: string, x: number, z: number, width: number, depth: number, height: number,
@@ -79,6 +105,7 @@ export class MuseumMap {
       mesh.metadata = { blocksMovement: true, blocksVision, museumStatic: true };
       collisionBoxes.push({ minX: x - width / 2, maxX: x + width / 2, minZ: z - depth / 2, maxZ: z + depth / 2, minY: 0, maxY: height });
       if (castShadow) shadowGenerator.addShadowCaster(mesh);
+      if (blocksVision) addFlashlightOccluder(`${name}-light-occluder`, x, z, width, depth, height);
       staticMeshes.push(mesh);
       return mesh;
     };

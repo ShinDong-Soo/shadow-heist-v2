@@ -154,6 +154,28 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
   const collisionBoxes: CollisionBox[] = [];
   const decorativeTrims: Mesh[] = [];
   const decorativePanels: Mesh[] = [];
+  const flashlightOccluderHeight = 3.15;
+  let flashlightOccluderMaterial = scene.getMaterialByName('museum-flashlight-occluder') as StandardMaterial | null;
+  if (!flashlightOccluderMaterial) {
+    flashlightOccluderMaterial = new StandardMaterial('museum-flashlight-occluder', scene);
+    flashlightOccluderMaterial.disableColorWrite = true;
+    flashlightOccluderMaterial.disableDepthWrite = true;
+    flashlightOccluderMaterial.backFaceCulling = false;
+  }
+  const addFlashlightOccluder = (name: string, x: number, z: number, width: number, depth: number, visualHeight: number) => {
+    if (visualHeight >= flashlightOccluderHeight - .05) return;
+    const occluder = MeshBuilder.CreateBox(name, {
+      width: Math.max(width, .34),
+      depth: Math.max(depth, .34),
+      height: flashlightOccluderHeight,
+    }, scene);
+    occluder.position.copyFromFloats(x, flashlightOccluderHeight / 2, z);
+    occluder.material = flashlightOccluderMaterial!;
+    occluder.isPickable = false;
+    occluder.receiveShadows = false;
+    occluder.alwaysSelectAsActiveMesh = true;
+    occluder.metadata = { flashlightOccluder: true };
+  };
   const addBoxObstacle = (
     name: string,
     x: number,
@@ -171,6 +193,7 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
     mesh.receiveShadows = true;
     mesh.metadata = { blocksMovement: true, blocksVision };
     if (castsKeyShadow) shadowGenerator.addShadowCaster(mesh);
+    if (blocksVision) addFlashlightOccluder(`${name}-light-occluder`, x, z, width, depth, height);
     collisionBoxes.push({ minX: x - width / 2, maxX: x + width / 2, minZ: z - depth / 2, maxZ: z + depth / 2, minY: 0, maxY: height });
     return mesh;
   };
@@ -496,12 +519,14 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
 
   guardFlashlight.setShadowCasters(scene.meshes.filter(mesh => (
     mesh.metadata?.blocksVision === true
+    || mesh.metadata?.flashlightOccluder === true
     || player.visual.shadowCasters.includes(mesh)
     || guard.shadowCasters.includes(mesh)
     || guardB.shadowCasters.includes(mesh)
   )));
   guardBFlashlight.setShadowCasters(scene.meshes.filter(mesh => (
     mesh.metadata?.blocksVision === true
+    || mesh.metadata?.flashlightOccluder === true
     || player.visual.shadowCasters.includes(mesh)
     || guard.shadowCasters.includes(mesh)
     || guardB.shadowCasters.includes(mesh)
