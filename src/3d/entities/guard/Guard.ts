@@ -26,9 +26,12 @@ export class Guard {
     this.flashlightPivot = new TransformNode('guard-flashlight-pivot', scene);
     this.flashlightPivot.parent = this.visual.flashlightSocket;
     this.flashlightPivot.position = new Vector3(0, 0, .08);
-    const flashlightMaterial = new StandardMaterial('guard-flashlight-material', scene);
-    flashlightMaterial.diffuseColor = new Color3(.11, .12, .13);
-    flashlightMaterial.specularColor = new Color3(.35, .35, .31);
+    let flashlightMaterial = scene.getMaterialByName('guard-flashlight-material') as StandardMaterial | null;
+    if (!flashlightMaterial) {
+      flashlightMaterial = new StandardMaterial('guard-flashlight-material', scene);
+      flashlightMaterial.diffuseColor = new Color3(.11, .12, .13);
+      flashlightMaterial.specularColor = new Color3(.35, .35, .31);
+    }
     const flashlightBody = MeshBuilder.CreateCylinder('guard-hand-flashlight', { height: .34, diameter: .105, tessellation: 10 }, scene);
     flashlightBody.parent = this.flashlightPivot;
     flashlightBody.rotation.x = Math.PI / 2;

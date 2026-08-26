@@ -11,6 +11,9 @@ export class SecurityCamera3D {
   private readonly light: SpotLight;
   private readonly ray = new Ray(Vector3.Zero(), new Vector3(0, 0, 1), 7);
   private readonly direction = Vector3.Zero();
+  private readonly toPlayer = Vector3.Zero();
+  private readonly flatDirection = Vector3.Zero();
+  private readonly flatToPlayer = Vector3.Zero();
   private elapsed = 0;
   private checkRemaining = 0;
 
@@ -37,7 +40,7 @@ export class SecurityCamera3D {
     this.light.intensity = alarmActive ? .12 : .42;
     this.checkRemaining -= deltaTime;
     if (this.checkRemaining > 0) return;
-    this.checkRemaining = .08;
+    this.checkRemaining = .1;
     this.performCheck();
   }
 
@@ -47,20 +50,20 @@ export class SecurityCamera3D {
 
   private performCheck() {
     const target = this.player.detectionTarget.getAbsolutePosition();
-    const toPlayer = target.subtract(this.position);
-    const distance = toPlayer.length();
+    target.subtractToRef(this.position, this.toPlayer);
+    const distance = this.toPlayer.length();
     if (distance > 7) {
       this.isPlayerVisible = false;
       return;
     }
-    const flatDirection = new Vector3(this.direction.x, 0, this.direction.z).normalize();
-    const flatToPlayer = new Vector3(toPlayer.x, 0, toPlayer.z).normalize();
-    if (Vector3.Dot(flatDirection, flatToPlayer) < Math.cos(.58 / 2)) {
+    this.flatDirection.copyFromFloats(this.direction.x, 0, this.direction.z).normalize();
+    this.flatToPlayer.copyFromFloats(this.toPlayer.x, 0, this.toPlayer.z).normalize();
+    if (Vector3.Dot(this.flatDirection, this.flatToPlayer) < Math.cos(.58 / 2)) {
       this.isPlayerVisible = false;
       return;
     }
     this.ray.origin.copyFrom(this.position);
-    toPlayer.scaleToRef(1 / Math.max(.001, distance), this.ray.direction);
+    this.toPlayer.scaleToRef(1 / Math.max(.001, distance), this.ray.direction);
     this.ray.length = distance;
     const hit = this.scene.pickWithRay(this.ray, mesh => mesh.metadata?.blocksVision === true, true);
     this.isPlayerVisible = !(hit?.hit && hit.distance < distance - .04);

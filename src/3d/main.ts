@@ -7,6 +7,7 @@ const debug = document.querySelector<HTMLElement>('#debug3D');
 const loading = document.querySelector<HTMLElement>('#loading3D');
 const loadingProgress = document.querySelector<HTMLElement>('#loadingProgress3D');
 const loadingStatus = document.querySelector<HTMLElement>('#loadingStatus3D');
+const loadingPercent = document.querySelector<HTMLElement>('#loadingPercent3D');
 const fps = document.querySelector<HTMLElement>('#fps3D');
 const camera = document.querySelector<HTMLElement>('#camera3D');
 const meshCount = document.querySelector<HTMLElement>('#meshCount3D');
@@ -38,16 +39,45 @@ const hideAwareness = document.querySelector<HTMLElement>('#hideAwareness3D');
 const exitMarker = document.querySelector<HTMLElement>('#exitMarker3D');
 const zone = document.querySelector<HTMLElement>('#zone3D');
 const loot = document.querySelector<HTMLElement>('#loot3D');
+const menu = document.querySelector<HTMLElement>('#menu3D');
+const play = document.querySelector<HTMLButtonElement>('#play3D');
+const quality = document.querySelector<HTMLSelectElement>('#quality3D');
+const fullscreen = document.querySelector<HTMLButtonElement>('#fullscreen3D');
+const pause = document.querySelector<HTMLElement>('#pause3D');
+const resume = document.querySelector<HTMLButtonElement>('#resume3D');
+const restart = document.querySelector<HTMLButtonElement>('#restart3D');
+const pauseMenu = document.querySelector<HTMLButtonElement>('#pauseMenu3D');
+const confirm = document.querySelector<HTMLElement>('#confirm3D');
+const confirmRestart = document.querySelector<HTMLButtonElement>('#confirmRestart3D');
+const cancelRestart = document.querySelector<HTMLButtonElement>('#cancelRestart3D');
+const result = document.querySelector<HTMLElement>('#result3D');
+const resultPanel = document.querySelector<HTMLElement>('#resultPanel3D');
+const resultTitle = document.querySelector<HTMLElement>('#resultTitle3D');
+const resultRank = document.querySelector<HTMLElement>('#resultRank3D');
+const resultReason = document.querySelector<HTMLElement>('#resultReason3D');
+const resultCrown = document.querySelector<HTMLElement>('#resultCrown3D');
+const resultLoot = document.querySelector<HTMLElement>('#resultLoot3D');
+const resultDetected = document.querySelector<HTMLElement>('#resultDetected3D');
+const resultChases = document.querySelector<HTMLElement>('#resultChases3D');
+const resultTime = document.querySelector<HTMLElement>('#resultTime3D');
+const resultScore = document.querySelector<HTMLElement>('#resultScore3D');
+const resultBadge = document.querySelector<HTMLElement>('#resultBadge3D');
+const resultBest = document.querySelector<HTMLElement>('#resultBest3D');
+const retry = document.querySelector<HTMLButtonElement>('#retry3D');
+const resultMenu = document.querySelector<HTMLButtonElement>('#resultMenu3D');
 
-if (!canvas || !root || !debug || !loading || !loadingProgress || !loadingStatus || !fps || !camera || !meshCount || !movement || !position || !guard || !guardB || !flashlight || !vision || !detection || !detectionFill || !detectionValue || !crown || !flow || !map || !phasePerf || !objective || !interaction || !interactionLabel || !interactionFill || !lockdown || !phase || !timer || !gateState || !announcement || !alarmOverlay || !hideOverlay || !hideAwareness || !exitMarker || !zone || !loot) {
+if (!canvas || !root || !debug || !loading || !loadingProgress || !loadingStatus || !loadingPercent || !fps || !camera || !meshCount || !movement || !position || !guard || !guardB || !flashlight || !vision || !detection || !detectionFill || !detectionValue || !crown || !flow || !map || !phasePerf || !objective || !interaction || !interactionLabel || !interactionFill || !lockdown || !phase || !timer || !gateState || !announcement || !alarmOverlay || !hideOverlay || !hideAwareness || !exitMarker || !zone || !loot || !menu || !play || !quality || !fullscreen || !pause || !resume || !restart || !pauseMenu || !confirm || !confirmRestart || !cancelRestart || !result || !resultPanel || !resultTitle || !resultRank || !resultReason || !resultCrown || !resultLoot || !resultDetected || !resultChases || !resultTime || !resultScore || !resultBadge || !resultBest || !retry || !resultMenu) {
   throw new Error('Babylon 3D bootstrap elements are missing.');
 }
 
 const game = new Game(canvas, {
-  root, debug, loading, loadingProgress, loadingStatus, fps, camera, meshCount, movement, position,
+  root, debug, loading, loadingProgress, loadingStatus, loadingPercent, fps, camera, meshCount, movement, position,
   guard, guardB, flashlight, vision, detection, detectionFill, detectionValue, crown, flow, map, phasePerf, objective,
   interaction, interactionLabel, interactionFill, lockdown, phase, timer, gateState, announcement,
   alarmOverlay, hideOverlay, hideAwareness, exitMarker, zone, loot,
+  menu, play, quality, fullscreen, pause, resume, restart, pauseMenu, confirm, confirmRestart, cancelRestart,
+  result, resultPanel, resultTitle, resultRank, resultReason, resultCrown, resultLoot,
+  resultDetected, resultChases, resultTime, resultScore, resultBadge, resultBest, retry, resultMenu,
 });
 game.start().catch(error => {
   console.error('[3D Foundation] Startup failed.', error);

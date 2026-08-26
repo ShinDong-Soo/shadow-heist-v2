@@ -16,7 +16,7 @@ import type { Engine } from '@babylonjs/core/Engines/engine';
 import { GameCamera, type CameraDistance } from '../camera/GameCamera';
 import { CROWN_HALL_CONFIG } from '../config/crownHallConfig';
 import { GAME_3D_CONFIG } from '../config/gameConfig';
-import { AssetManager, type AssetProgress } from '../core/AssetManager';
+import type { AssetProgress } from '../core/AssetManager';
 import { GameFlowManager } from '../core/GameFlowManager';
 import { Guard } from '../entities/guard/Guard';
 import { GuardController } from '../entities/guard/GuardController';
@@ -46,6 +46,7 @@ import { MUSEUM_MAP_CONFIG } from '../config/museumMapConfig';
 import { MuseumMap } from './MuseumMap';
 import { OptionalTreasure } from '../entities/treasure/OptionalTreasure';
 import { SecurityCamera3D } from '../systems/SecurityCamera3D';
+import { getQualityProfile } from '../systems/GraphicsQuality';
 
 export type PrototypeSceneResult = {
   scene: Scene;
@@ -54,6 +55,7 @@ export type PrototypeSceneResult = {
   controller: PlayerController;
   guard: Guard;
   guardController: GuardController;
+  guardBController: GuardController;
   guardFlashlight: GuardFlashlight;
   guardVision: GuardVision;
   detection: DetectionSystem;
@@ -69,6 +71,8 @@ export type PrototypeSceneResult = {
   readonly interactionLabel: string;
   readonly currentZone: string;
   readonly lootLabel: string;
+  readonly collectedLootIds: readonly string[];
+  readonly totalLootCount: number;
   readonly shortcutState: string;
   readonly secondaryGuardLabel: string;
   readonly securityCameraLabel: string;
@@ -94,6 +98,7 @@ export type PrototypeSceneResult = {
 
 export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasElement, onProgress: AssetProgress): Promise<PrototypeSceneResult> {
   const scene = new Scene(engine);
+  scene.skipPointerMovePicking = true;
   const [r, g, b, a] = GAME_3D_CONFIG.scene.clearColor;
   scene.clearColor = new Color4(r, g, b, a);
   scene.environmentIntensity = .62;
@@ -108,7 +113,8 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
   keyLight.intensity = .8;
   keyLight.diffuse = new Color3(.82, .72, .55);
 
-  const shadowGenerator = new ShadowGenerator(GAME_3D_CONFIG.scene.shadowMapSize, keyLight);
+  const qualityProfile = getQualityProfile();
+  const shadowGenerator = new ShadowGenerator(qualityProfile.keyShadowMapSize, keyLight);
   shadowGenerator.usePercentageCloserFiltering = true;
   shadowGenerator.filteringQuality = ShadowGenerator.QUALITY_LOW;
 
@@ -312,6 +318,8 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
   const guardBVision = new GuardVision(scene, guardB, guardBFlashlight, player);
   const detection = new DetectionSystem();
   const stealthAudio = new StealthAudioSystem(guard.position);
+  onProgress(.18, 'PRELOADING GUARD AUDIO');
+  await stealthAudio.preload();
   const noise = new NoiseSystem();
   const playerAnimation = new PlayerAnimationController(player, controller, strength => {
     const surface = noise.surfaceAt(player.position);
@@ -430,19 +438,15 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
   let lootCount = 0;
   let lootValue = 0;
   let cctvReportCooldown = 0;
+  let guardAnimationAccumulator = 0;
+  let guardBAnimationAccumulator = 0;
 
-  let loadedModel: AbstractMesh | null = null;
-  try {
-    const assets = new AssetManager(scene, onProgress);
-    const loaded = await assets.loadPrototypeModel('test-cube.glb');
-    loadedModel = loaded.meshes.find(mesh => mesh.name !== '__root__') ?? loaded.meshes[0] ?? null;
-    // Phase 01's pipeline asset still loads as a health check, but the temporary
-    // cube is hidden so it cannot weaken the crown's visual hierarchy.
-    loaded.meshes.filter(mesh => !mesh.parent).forEach(rootMesh => rootMesh.setEnabled(false));
-  } catch (error) {
-    console.warn('[Crown Hall] GLB health-check failed; primitive scene remains available.', error);
-    onProgress(.92, 'GLB FALLBACK ACTIVE');
-  }
+  // The old hidden test-cube GLB was a Phase 01 pipeline check. It was never
+  // visible, so loading the glTF runtime and model on every visit only delayed
+  // first play. The current modular museum is entirely built from optimized
+  // Babylon primitives and needs no runtime GLB request.
+  const loadedModel: AbstractMesh | null = null;
+  onProgress(.92, 'MUSEUM AND LOCKDOWN ASSETS READY');
 
   // Static museum geometry never changes its transform. Freezing those world
   // matrices removes repeated transform work while player, guard, debug and
@@ -486,6 +490,7 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
     controller,
     guard,
     guardController,
+    guardBController,
     guardFlashlight,
     guardVision,
     detection,
@@ -501,6 +506,8 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
     get interactionLabel() { return interactionSystem.label; },
     get currentZone() { return museumMap.zoneAt(player.position).label; },
     get lootLabel() { return `${lootCount}/${optionalTreasures.length} · ₩${lootValue.toLocaleString('ko-KR')}`; },
+    get collectedLootIds() { return optionalTreasures.filter(treasure => treasure.collected).map(treasure => treasure.id); },
+    get totalLootCount() { return optionalTreasures.length; },
     get shortcutState() { return museumMap.shortcutState; },
     get secondaryGuardLabel() { return `${guardBController.fsmState}/${guardBController.state} · ${guardBController.transitionLabel} · NAV ${guardBController.navigationLabel} · POS ${guardB.position.x.toFixed(1)}, ${guardB.position.z.toFixed(1)}`; },
     get securityCameraLabel() { return securityCameras.some(camera => camera.isPlayerVisible) ? 'PLAYER VISIBLE' : 'SCANNING'; },
@@ -555,8 +562,19 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
       museumMap.update(deltaTime);
       guardController.update(deltaTime);
       guardBController.update(deltaTime);
-      guardAnimation.update(deltaTime);
-      guardBAnimation.update(deltaTime);
+      guardAnimationAccumulator += deltaTime;
+      guardBAnimationAccumulator += deltaTime;
+      const farAnimationInterval = qualityProfile.farAnimationInterval;
+      const guardNear = Vector3.DistanceSquared(guard.position, player.position) <= 144;
+      const guardBNear = Vector3.DistanceSquared(guardB.position, player.position) <= 144;
+      if (guardNear || guardAnimationAccumulator >= farAnimationInterval) {
+        guardAnimation.update(guardAnimationAccumulator);
+        guardAnimationAccumulator = 0;
+      }
+      if (guardBNear || guardBAnimationAccumulator >= farAnimationInterval) {
+        guardBAnimation.update(guardBAnimationAccumulator);
+        guardBAnimationAccumulator = 0;
+      }
       guardFlashlight.syncTransform();
       guardBFlashlight.syncTransform();
       guardDebug.update(guardController);
@@ -643,6 +661,8 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
       controller.direction.copyFromFloats(0, 0, 1);
       detection.reset();
       cctvReportCooldown = 0;
+      guardAnimationAccumulator = 0;
+      guardBAnimationAccumulator = 0;
       cameraRig.reset();
     },
     teleportToEscapeRouteTest: () => {

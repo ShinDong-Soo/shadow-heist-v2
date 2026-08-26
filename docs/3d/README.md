@@ -18,6 +18,8 @@
 12. [미완성 기능 보완 완료](remaining-plan-completion.md) — 테스트 항목을 제외하고 1~9단계의 남은 기능을 다시 대조한 결과
 13. [3D Guard AI FSM](guard-ai-fsm-3d.md) — 기억·청각·조사·추격·수색·복귀를 포함한 10단계 경비 AI 이식
 14. [3D 박물관 전체 맵](full-museum-map-3d.md) — 7개 구역, 경비원 2명, CCTV, 선택 보물, 전체 경보와 비상 탈출을 통합한 11단계
+15. [3D 결과·재시작·게임 오버](result-restart-game-over-3d.md) — 한 판의 성공·실패, 점수·랭크, 일시정지, 재시도와 전체 초기화를 완성한 13단계
+16. [3D 웹 최적화](web-optimization-3d.md) — 지연 로딩, 품질 설정, Instance, LOS·애니메이션 주기, Focus와 웹 안정성을 보완한 14단계
 
 ## 문서 관리 방법
 

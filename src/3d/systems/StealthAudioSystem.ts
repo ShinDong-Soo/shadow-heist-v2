@@ -7,12 +7,19 @@ export class StealthAudioSystem {
   private context: AudioContext | null = null;
   private guardFootstepBuffer: AudioBuffer | null = null;
   private guardFootstepLoading = false;
+  private guardFootstepPromise: Promise<void> | null = null;
   private guardFootstepCursor = 0;
   private breathRemaining = 0;
 
   constructor(_initialGuardPosition: Vector3) {
     window.addEventListener('keydown', this.unlock, { once: true, capture: true });
     window.addEventListener('pointerdown', this.unlock, { once: true, capture: true });
+  }
+
+  async preload() {
+    const context = this.ensureContext();
+    if (!context) return;
+    await this.loadGuardFootstep(context);
   }
 
   update(deltaTime: number, _guardPosition: Vector3, _playerPosition: Vector3, hidden: boolean, tension: number) {
@@ -161,21 +168,23 @@ export class StealthAudioSystem {
     try {
       if (!this.context) this.context = new AudioContext();
       if (this.context.state === 'suspended') void this.context.resume();
-      this.loadGuardFootstep(this.context);
+      void this.loadGuardFootstep(this.context);
       return this.context;
     } catch {
       return null;
     }
   }
 
-  private loadGuardFootstep(context: AudioContext) {
-    if (this.guardFootstepBuffer || this.guardFootstepLoading) return;
+  private loadGuardFootstep(context: AudioContext): Promise<void> {
+    if (this.guardFootstepBuffer) return Promise.resolve();
+    if (this.guardFootstepPromise) return this.guardFootstepPromise;
     this.guardFootstepLoading = true;
-    void fetch(`${import.meta.env.BASE_URL}assets/audio/guard-footstep.mp3`)
+    this.guardFootstepPromise = fetch(`${import.meta.env.BASE_URL}assets/audio/guard-footstep.mp3`)
       .then(response => response.ok ? response.arrayBuffer() : Promise.reject(new Error(`HTTP ${response.status}`)))
       .then(data => context.decodeAudioData(data))
       .then(buffer => { this.guardFootstepBuffer = buffer; })
       .catch(error => console.warn('[Audio] Guard footstep sample unavailable; using synthesized fallback.', error))
       .finally(() => { this.guardFootstepLoading = false; });
+    return this.guardFootstepPromise;
   }
 }

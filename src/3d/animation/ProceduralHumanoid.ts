@@ -21,6 +21,7 @@ type HumanoidColors = {
  * Gameplay roots stay stable while only this visual hierarchy animates.
  */
 export class ProceduralHumanoid {
+  private static readonly materialCache = new WeakMap<Scene, Map<HumanoidStyle, Record<keyof HumanoidColors, StandardMaterial>>>();
   readonly root: TransformNode;
   readonly hips: TransformNode;
   readonly chest: TransformNode;
@@ -57,10 +58,8 @@ export class ProceduralHumanoid {
           accent: new Color3(.12, .66, .68),
           skin: new Color3(.34, .25, .2),
         };
-    const cloth = this.makeMaterial(scene, `${style.toLowerCase()}-cloth`, colors.cloth);
-    const dark = this.makeMaterial(scene, `${style.toLowerCase()}-dark`, colors.dark);
-    const accent = this.makeMaterial(scene, `${style.toLowerCase()}-accent`, colors.accent, .08);
-    const skin = this.makeMaterial(scene, `${style.toLowerCase()}-skin`, colors.skin);
+    const materials = this.getMaterials(scene, style, colors);
+    const { cloth, dark, accent, skin } = materials;
 
     this.root = new TransformNode(`${style.toLowerCase()}-character-visual`, scene);
     this.root.parent = parent;
@@ -152,6 +151,25 @@ export class ProceduralHumanoid {
     material.specularColor = color.scale(.65);
     material.emissiveColor = color.scale(emissive);
     return material;
+  }
+
+  private getMaterials(scene: Scene, style: HumanoidStyle, colors: HumanoidColors) {
+    let sceneCache = ProceduralHumanoid.materialCache.get(scene);
+    if (!sceneCache) {
+      sceneCache = new Map();
+      ProceduralHumanoid.materialCache.set(scene, sceneCache);
+    }
+    const cached = sceneCache.get(style);
+    if (cached) return cached;
+    const prefix = style.toLowerCase();
+    const created = {
+      cloth: this.makeMaterial(scene, `${prefix}-cloth`, colors.cloth),
+      dark: this.makeMaterial(scene, `${prefix}-dark`, colors.dark),
+      accent: this.makeMaterial(scene, `${prefix}-accent`, colors.accent, .08),
+      skin: this.makeMaterial(scene, `${prefix}-skin`, colors.skin),
+    };
+    sceneCache.set(style, created);
+    return created;
   }
 
   private makeJoint(scene: Scene, name: string, parent: TransformNode, position: Vector3) {

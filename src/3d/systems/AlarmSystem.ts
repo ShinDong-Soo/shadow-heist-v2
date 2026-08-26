@@ -6,6 +6,7 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
 import type { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import type { Scene } from '@babylonjs/core/scene';
+import { getQualityProfile } from './GraphicsQuality';
 
 export type AlarmState = 'INACTIVE' | 'TRIGGERING' | 'ACTIVE' | 'ENDING';
 
@@ -70,7 +71,7 @@ export class AlarmSystem {
     }
     const pulse = Math.sin(this.elapsed * Math.PI * 2 / .6) > -.5 ? 1 : .15;
     this.lights.forEach((light, index) => {
-      light.intensity = (.72 + index * .08) * pulse;
+      light.intensity = (.72 + index * .08) * pulse * getQualityProfile().alarmLightMultiplier;
     });
     this.beaconMaterials.forEach((material, index) => {
       const offsetPulse = Math.sin((this.elapsed + index * .08) * Math.PI * 2 / .6) > -.5 ? 1 : .15;

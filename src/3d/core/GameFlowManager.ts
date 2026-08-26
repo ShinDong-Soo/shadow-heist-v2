@@ -31,6 +31,7 @@ export class GameFlowManager {
   holdProgress = 0;
   announcement = '';
   announcementTone: 'gold' | 'alarm' | 'clear' = 'gold';
+  failureReason = '';
   private readonly sequence = new CrownStealSequence();
   private readonly lockdown: LockdownSystem;
   private holdElapsed = 0;
@@ -69,10 +70,18 @@ export class GameFlowManager {
     return this.lockdown.debugSetRemaining(5);
   }
 
+  debugComplete() {
+    if (this.phase === GamePhase.COMPLETE || this.phase === GamePhase.FAILED) return false;
+    this.hasCrown = true;
+    this.phase = GamePhase.ESCAPE;
+    return this.complete();
+  }
+
   fail(reason = 'CAUGHT BY SECURITY') {
     if (this.phase === GamePhase.FAILED || this.phase === GamePhase.COMPLETE) return false;
     this.sequence.reset();
     this.phase = GamePhase.FAILED;
+    this.failureReason = reason;
     this.holdElapsed = 0;
     this.holdProgress = 0;
     this.effects.setPlayerLocked(true);
@@ -109,6 +118,7 @@ export class GameFlowManager {
     this.holdProgress = 0;
     this.lockdown.reset();
     this.announcement = '';
+    this.failureReason = '';
     this.announcementRemaining = 0;
     this.lastEvent = 'NONE';
     this.effects.setPlayerLocked(false);
@@ -129,7 +139,7 @@ export class GameFlowManager {
     if (this.phase === GamePhase.LOCKDOWN) return 'SURVIVE LOCKDOWN';
     if (this.phase === GamePhase.ESCAPE) return 'ESCAPE VIA ARCHIVE EAST';
     if (this.phase === GamePhase.COMPLETE) return 'HEIST COMPLETE';
-    if (this.phase === GamePhase.FAILED) return 'HEIST FAILED · PRESS R TO RETRY';
+    if (this.phase === GamePhase.FAILED) return 'HEIST FAILED';
     return this.crownHallDiscovered ? 'STEAL THE CROWN' : 'FIND THE CROWN HALL';
   }
 

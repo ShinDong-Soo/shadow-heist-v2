@@ -4,6 +4,8 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Scene } from '@babylonjs/core/scene';
+import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
+import '@babylonjs/core/Meshes/instancedMesh';
 import type { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import { MUSEUM_MAP_CONFIG, museumZoneAt } from '../config/museumMapConfig';
 import type { CollisionBox } from '../systems/CollisionWorld';
@@ -20,7 +22,7 @@ export class MuseumMap {
   private readonly shortcutGate: Mesh;
   private readonly shortcutLampMaterial: StandardMaterial;
   private readonly escapeGuideMaterial: StandardMaterial;
-  private readonly escapeGuideMeshes: Mesh[] = [];
+  private readonly escapeGuideMeshes: AbstractMesh[] = [];
   private readonly alarmMaterials: StandardMaterial[] = [];
   private shortcutOpen = false;
   private shortcutProgress = 0;
@@ -52,7 +54,7 @@ export class MuseumMap {
     const securityRed = material('museum-security-red', new Color3(.22, .018, .012), new Color3(.12, .008, .004));
     const serviceBlue = material('museum-service-blue', new Color3(.045, .16, .18), new Color3(.012, .08, .09));
 
-    const staticMeshes: Mesh[] = [];
+    const staticMeshes: AbstractMesh[] = [];
     const addFloor = (name: string, x: number, z: number, width: number, depth: number, floorMaterial: StandardMaterial) => {
       const mesh = MeshBuilder.CreateGround(name, { width, height: depth, subdivisions: 1 }, scene);
       mesh.position.copyFromFloats(x, .018, z);
@@ -176,13 +178,20 @@ export class MuseumMap {
     }
 
     // Zone-wide alarm beacons are emissive only, avoiding many dynamic lights.
+    this.alarmMaterials.push(
+      material('museum-alarm-material-even', new Color3(.18, .012, .008), new Color3(.02, .001, 0)),
+      material('museum-alarm-material-odd', new Color3(.18, .012, .008), new Color3(.02, .001, 0)),
+    );
+    const beaconSources: Array<Mesh | null> = [null, null];
     for (const [index, x, z] of [[0, 0, -45], [1, -5.5, -36], [2, 5.8, -25], [3, 0, -14], [4, 0, -8], [5, 8.5, -38]] as const) {
-      const beaconMaterial = material(`museum-alarm-material-${index}`, new Color3(.18, .012, .008), new Color3(.02, .001, 0));
-      this.alarmMaterials.push(beaconMaterial);
-      const beacon = MeshBuilder.CreateCylinder(`museum-alarm-beacon-${index}`, { diameter: .28, height: .38, tessellation: 10 }, scene);
+      const phase = index % 2;
+      const beacon = beaconSources[phase]
+        ? beaconSources[phase]!.createInstance(`museum-alarm-beacon-${index}`)
+        : MeshBuilder.CreateCylinder(`museum-alarm-beacon-${index}`, { diameter: .28, height: .38, tessellation: 10 }, scene);
+      if (!beaconSources[phase] && beacon instanceof Mesh) beaconSources[phase] = beacon;
       beacon.rotation.z = Math.PI / 2;
       beacon.position.copyFromFloats(x, 2.68, z);
-      beacon.material = beaconMaterial;
+      if (beacon instanceof Mesh) beacon.material = this.alarmMaterials[phase];
       staticMeshes.push(beacon);
     }
 
@@ -201,11 +210,17 @@ export class MuseumMap {
     // These emissive floor markers form a physical route cue instead of a
     // minimap arrow. They appear only when Escape starts: first east through
     // Archive, then south through the shorter service corridor.
+    let guideSource: Mesh | null = null;
     const addEscapeGuide = (index: number, x: number, z: number, yaw: number) => {
-      const marker = MeshBuilder.CreateCylinder(`museum-escape-guide-${index}`, { diameter: .52, height: .026, tessellation: 3 }, scene);
+      const marker = guideSource
+        ? guideSource.createInstance(`museum-escape-guide-${index}`)
+        : MeshBuilder.CreateCylinder(`museum-escape-guide-${index}`, { diameter: .52, height: .026, tessellation: 3 }, scene);
+      if (!guideSource && marker instanceof Mesh) {
+        guideSource = marker;
+        guideSource.material = this.escapeGuideMaterial;
+      }
       marker.position.copyFromFloats(x, .045, z);
       marker.rotation.y = yaw;
-      marker.material = this.escapeGuideMaterial;
       marker.setEnabled(false);
       this.escapeGuideMeshes.push(marker);
       staticMeshes.push(marker);

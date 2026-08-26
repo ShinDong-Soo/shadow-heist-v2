@@ -5,7 +5,9 @@ export const GUARD_VISION_CONFIG = {
   detectionTime: 1.2,
   detectionDecayTime: 1.8,
   suspiciousThreshold: .35,
-  checkInterval: .05,
+  // 15 Hz is enough for a 1.2 second detection ramp and avoids raycasts on
+  // every render frame. Distance and angle still reject before LOS picking.
+  checkInterval: 1 / 15,
   suspiciousRotationSpeed: 1.35,
   detectedRotationSpeed: 2.3,
 } as const;

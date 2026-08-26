@@ -6,6 +6,7 @@ import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import type { Scene } from '@babylonjs/core/scene';
 import { GUARD_CONFIG } from '../../config/guardConfig';
 import type { Guard } from './Guard';
+import { getQualityProfile } from '../../systems/GraphicsQuality';
 
 export type GuardFlashlightMode = 'PATROL' | 'ALERT' | 'FOCUS' | 'SEARCH' | 'CHASE';
 
@@ -23,7 +24,7 @@ export class GuardFlashlight {
     this.light.diffuse = new Color3(1, .87, .64);
     this.light.specular = new Color3(.7, .57, .38);
 
-    this.shadowGenerator = new ShadowGenerator(config.shadowMapSize, this.light);
+    this.shadowGenerator = new ShadowGenerator(getQualityProfile().flashlightShadowMapSize, this.light);
     this.shadowGenerator.usePoissonSampling = true;
     // Smaller offsets reduce visible light leaking around thick Crown Hall
     // walls while keeping the low-cost 512px shadow map.
