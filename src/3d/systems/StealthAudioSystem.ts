@@ -49,15 +49,22 @@ export class StealthAudioSystem {
     oscillator.stop(context.currentTime + .28);
   }
 
-  playGuardFootstep(guardPosition: Vector3, playerPosition: Vector3, hidden: boolean, strength: number, surface: FootstepSurface = 'MARBLE') {
+  playGuardFootstep(
+    guardPosition: Vector3,
+    playerPosition: Vector3,
+    hidden: boolean,
+    strength: number,
+    surface: FootstepSurface = 'MARBLE',
+    chasing = false,
+  ) {
     const distance = Vector3.Distance(guardPosition, playerPosition);
-    if (this.playSampledGuardFootstep(distance, guardPosition.x - playerPosition.x, hidden, strength, surface)) return;
+    if (this.playSampledGuardFootstep(distance, guardPosition.x - playerPosition.x, hidden, strength, surface, chasing)) return;
     this.playFootstep(
       distance,
       guardPosition.x - playerPosition.x,
       hidden,
-      strength,
-      this.surfaceFrequency(surface, 68),
+      strength * (chasing ? 1.08 : 1),
+      this.surfaceFrequency(surface, chasing ? 78 : 68),
       StealthAudioSystem.GUARD_AUDIBLE_DISTANCE,
     );
   }
@@ -91,7 +98,7 @@ export class StealthAudioSystem {
     const oscillator = context.createOscillator();
     const gain = context.createGain();
     const panner = context.createStereoPanner();
-    const distanceGain = Math.pow(1 - Scalar.Clamp(distance / maxDistance, 0, 1), 1.35);
+    const distanceGain = this.distanceAttenuation(distance, maxDistance);
     oscillator.type = 'triangle';
     oscillator.frequency.setValueAtTime(frequency, context.currentTime);
     oscillator.frequency.exponentialRampToValueAtTime(frequency * .5, context.currentTime + .09);
@@ -127,6 +134,7 @@ export class StealthAudioSystem {
     hidden: boolean,
     strength: number,
     surface: FootstepSurface,
+    chasing: boolean,
   ) {
     if (distance > StealthAudioSystem.GUARD_AUDIBLE_DISTANCE || !this.guardFootstepBuffer) return false;
     const context = this.ensureContext();
@@ -135,7 +143,7 @@ export class StealthAudioSystem {
     const gain = context.createGain();
     const panner = context.createStereoPanner();
     const filter = context.createBiquadFilter();
-    const distanceGain = Math.pow(1 - Scalar.Clamp(distance / StealthAudioSystem.GUARD_AUDIBLE_DISTANCE, 0, 1), 1.35);
+    const distanceGain = this.distanceAttenuation(distance, StealthAudioSystem.GUARD_AUDIBLE_DISTANCE);
     const sliceCount = Math.max(4, Math.min(12, Math.round(this.guardFootstepBuffer.duration / .55)));
     const sliceLength = this.guardFootstepBuffer.duration / sliceCount;
     const sliceIndex = this.guardFootstepCursor % sliceCount;
@@ -144,18 +152,32 @@ export class StealthAudioSystem {
     const now = context.currentTime;
     this.guardFootstepCursor += 1;
     source.buffer = this.guardFootstepBuffer;
-    source.playbackRate.value = surface === 'METAL' ? 1.16 : surface === 'CARPET' ? .86 : 1;
-    const peak = Math.max(.0001, distanceGain * (hidden ? .34 : .24) * strength);
+    // Chase shortens the sample so the approaching threat reads as a run, not
+    // a slightly louder patrol step.
+    const surfaceRate = surface === 'METAL' ? 1.16 : surface === 'CARPET' ? .86 : 1;
+    source.playbackRate.value = surfaceRate * (chasing ? 1.32 : 1);
+    const peak = Math.max(.0001, distanceGain * (hidden ? .38 : .28) * strength * (chasing ? 1.12 : 1));
     gain.gain.setValueAtTime(.0001, now);
     gain.gain.exponentialRampToValueAtTime(peak, now + .012);
     gain.gain.setValueAtTime(Math.max(.0001, peak * .68), now + Math.max(.03, duration - .07));
     gain.gain.exponentialRampToValueAtTime(.0001, now + duration);
     panner.pan.value = Scalar.Clamp(horizontalOffset / Math.max(2.5, distance), -1, 1);
     filter.type = 'lowpass';
-    filter.frequency.value = hidden ? 3600 : 4200;
+    filter.frequency.value = hidden ? 3600 : chasing ? 5200 : 4200;
     source.connect(gain).connect(filter).connect(panner).connect(context.destination);
     source.start(now, offset, duration);
     return true;
+  }
+
+  /**
+   * Keep footsteps almost full volume when a guard is nearby, then fall off
+   * steeply so distant patrols stay as soft directional cues only.
+   */
+  private distanceAttenuation(distance: number, maxDistance: number) {
+    const nearFull = 2.4;
+    if (distance <= nearFull) return 1;
+    const t = Scalar.Clamp((distance - nearFull) / Math.max(.001, maxDistance - nearFull), 0, 1);
+    return Math.pow(1 - t, 2.35);
   }
 
   private surfaceFrequency(surface: FootstepSurface, base: number) {

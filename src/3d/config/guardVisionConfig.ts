@@ -1,5 +1,7 @@
 export const GUARD_VISION_CONFIG = {
-  range: 8,
+  // Keep detection roughly aligned with the visible flashlight reach so the
+  // dark-museum beam reads as the threat the player can outmaneuver.
+  range: 9.2,
   alarmRangeMultiplier: 1.15,
   angle: 90 * Math.PI / 180,
   detectionTime: 1.2,

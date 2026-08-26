@@ -6,6 +6,7 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
 import type { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import type { Scene } from '@babylonjs/core/scene';
+import { GAME_3D_CONFIG } from '../config/gameConfig';
 import { getQualityProfile } from './GraphicsQuality';
 
 export type AlarmState = 'INACTIVE' | 'TRIGGERING' | 'ACTIVE' | 'ENDING';
@@ -93,8 +94,8 @@ export class AlarmSystem {
     this.state = 'TRIGGERING';
     this.elapsed = 0;
     this.nextBeepAt = 0;
-    this.ambient.intensity = .34;
-    this.keyLight.intensity = .56;
+    this.ambient.intensity = GAME_3D_CONFIG.lighting.alarmAmbientIntensity;
+    this.keyLight.intensity = GAME_3D_CONFIG.lighting.alarmKeyIntensity;
     this.ensureAudio();
     this.playWarningTone();
   }
@@ -103,8 +104,8 @@ export class AlarmSystem {
     this.state = 'INACTIVE';
     this.elapsed = 0;
     this.nextBeepAt = 0;
-    this.ambient.intensity = .48;
-    this.keyLight.intensity = .8;
+    this.ambient.intensity = GAME_3D_CONFIG.lighting.ambientIntensity;
+    this.keyLight.intensity = GAME_3D_CONFIG.lighting.keyIntensity;
     this.lights.forEach(light => { light.intensity = 0; });
     this.beaconMaterials.forEach(material => material.emissiveColor.copyFromFloats(.025, .002, .001));
     this.rampGain(this.escapeGain, 0, .12);

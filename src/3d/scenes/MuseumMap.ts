@@ -47,15 +47,17 @@ export class MuseumMap {
     const sculptureFloor = material('museum-sculpture-marble', new Color3(.22, .25, .245));
     sculptureFloor.specularColor = new Color3(.22, .25, .25);
     sculptureFloor.specularPower = 58;
-    const archiveFloor = material('museum-archive-floor', new Color3(.09, .15, .16), new Color3(.008, .022, .024));
+    // Dark-museum floors must not self-illuminate. Any leftover emissive would
+    // outline whole rooms before the player arrives.
+    const archiveFloor = material('museum-archive-floor', new Color3(.09, .15, .16));
     const corridorFloor = material('museum-security-floor', new Color3(.065, .075, .08));
     const entranceFloor = material('museum-service-floor', new Color3(.09, .105, .105));
-    const brass = material('museum-brass', new Color3(.45, .29, .08), new Color3(.035, .018, .003));
+    const brass = material('museum-brass', new Color3(.45, .29, .08), new Color3(.012, .006, .001));
     const wood = material('museum-gallery-wood', new Color3(.19, .09, .045));
     const stone = material('museum-sculpture-stone', new Color3(.42, .43, .4));
-    const shelf = material('museum-archive-shelf', new Color3(.12, .2, .21), new Color3(.004, .012, .013));
-    const securityRed = material('museum-security-red', new Color3(.22, .018, .012), new Color3(.12, .008, .004));
-    const serviceBlue = material('museum-service-blue', new Color3(.045, .16, .18), new Color3(.012, .08, .09));
+    const shelf = material('museum-archive-shelf', new Color3(.12, .2, .21));
+    const securityRed = material('museum-security-red', new Color3(.22, .018, .012), new Color3(.035, .002, .001));
+    const serviceBlue = material('museum-service-blue', new Color3(.045, .16, .18), new Color3(.004, .028, .032));
 
     const staticMeshes: AbstractMesh[] = [];
     const addFloor = (name: string, x: number, z: number, width: number, depth: number, floorMaterial: StandardMaterial) => {

@@ -84,7 +84,7 @@ export class GuardAnimationController {
   private updateLocomotion(travel: number) {
     const moving = this.state === 'PATROL' || this.state === 'ALERT' || this.state === 'INVESTIGATE' || this.state === 'RETURN' || this.state === 'CHASE';
     if (!moving || travel <= .0001) return;
-    const stride = this.state === 'CHASE' ? 1.45 : this.state === 'ALERT' ? 1.18 : 1.05;
+    const stride = this.state === 'CHASE' ? 1.18 : this.state === 'ALERT' ? 1.18 : 1.05;
     this.locomotionPhase += travel / stride * Math.PI * 2;
     this.distanceSinceFootstep += travel;
     while (this.distanceSinceFootstep >= stride / 2) {

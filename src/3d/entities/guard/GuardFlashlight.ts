@@ -21,9 +21,8 @@ export class GuardFlashlight {
     this.light = new SpotLight(`guard-flashlight-${id}`, Vector3.Zero(), direction, config.angle, config.exponent, scene);
     this.light.range = config.range;
     this.light.intensity = config.intensity;
-    // The museum also contains ambient, crown, CCTV and alarm lights. Give the
-    // moving gameplay light a higher priority so Babylon keeps it in the
-    // material's active light set when several lights overlap the same room.
+    // Dark museum: keep a warm threat beam that remains readable past the
+    // player's local fill when several lights compete for the same mesh.
     this.light.renderPriority = 20;
     this.light.diffuse = new Color3(1, .87, .64);
     this.light.specular = new Color3(.7, .57, .38);

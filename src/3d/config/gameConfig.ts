@@ -68,6 +68,30 @@ export const GAME_3D_CONFIG = {
   scene: {
     groundSize: 72,
     shadowMapSize: 512,
-    clearColor: [0.075, 0.105, 0.115, 1] as const,
+    // Near-black clear color keeps the unlit museum from reading as foggy grey.
+    clearColor: [0.012, 0.016, 0.02, 1] as const,
+    environmentIntensity: .08,
+  },
+  lighting: {
+    // Global fill is intentionally tiny. Local player vision and guard
+    // flashlights carry readable gameplay lighting.
+    ambientIntensity: .045,
+    ambientDiffuse: [.22, .28, .32] as const,
+    ambientGround: [.008, .01, .012] as const,
+    keyIntensity: .06,
+    keyDiffuse: [.35, .32, .28] as const,
+    alarmAmbientIntensity: .1,
+    alarmKeyIntensity: .14,
+  },
+  playerVision: {
+    height: 1.48,
+    range: 6.4,
+    intensity: 3.55,
+    crouchRangeMultiplier: .78,
+    crouchIntensityMultiplier: .82,
+    // Inside a locker the personal fill collapses so the closed metal box
+    // does not accidentally light the surrounding room.
+    hiddenRange: 1.35,
+    hiddenIntensity: .18,
   },
 } as const;

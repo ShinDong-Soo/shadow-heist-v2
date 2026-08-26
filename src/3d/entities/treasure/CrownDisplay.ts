@@ -28,12 +28,12 @@ export class CrownDisplay {
 
     const gold = new StandardMaterial('crown-display-trim-material', scene);
     gold.diffuseColor = new Color3(.58, .39, .12);
-    gold.emissiveColor = new Color3(.035, .018, .002);
+    gold.emissiveColor = new Color3(.012, .006, .001);
     gold.specularColor = new Color3(.75, .55, .2);
 
     const glass = new StandardMaterial('crown-glass-material', scene);
     glass.diffuseColor = new Color3(.28, .5, .5);
-    glass.emissiveColor = new Color3(.015, .04, .045);
+    glass.emissiveColor = new Color3(.004, .012, .014);
     glass.specularColor = new Color3(.85, 1, 1);
     glass.alpha = .18;
     glass.backFaceCulling = false;
@@ -77,7 +77,7 @@ export class CrownDisplay {
 
     const lightPoolMaterial = new StandardMaterial('crown-light-pool-material', scene);
     lightPoolMaterial.diffuseColor = new Color3(.34, .22, .06);
-    lightPoolMaterial.emissiveColor = new Color3(.075, .042, .006);
+    lightPoolMaterial.emissiveColor = new Color3(.028, .016, .002);
     lightPoolMaterial.alpha = .34;
     this.lightPool = MeshBuilder.CreateCylinder('crown-light-pool', {
       diameter: 3.8,

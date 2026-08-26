@@ -28,6 +28,7 @@ import { Player } from '../entities/player/Player';
 import { PlayerController } from '../entities/player/PlayerController';
 import { PlayerHideController } from '../entities/player/PlayerHideController';
 import { PlayerAnimationController } from '../entities/player/PlayerAnimationController';
+import { PlayerVisionLight } from '../entities/player/PlayerVisionLight';
 import { LockerHideSpot } from '../entities/hide/LockerHideSpot';
 import { Crown } from '../entities/treasure/Crown';
 import { CrownDisplay } from '../entities/treasure/CrownDisplay';
@@ -101,17 +102,18 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
   scene.skipPointerMovePicking = true;
   const [r, g, b, a] = GAME_3D_CONFIG.scene.clearColor;
   scene.clearColor = new Color4(r, g, b, a);
-  scene.environmentIntensity = .62;
+  scene.environmentIntensity = GAME_3D_CONFIG.scene.environmentIntensity;
 
+  const lighting = GAME_3D_CONFIG.lighting;
   const ambient = new HemisphericLight('crown-hall-ambient', new Vector3(.2, 1, -.35), scene);
-  ambient.intensity = .48;
-  ambient.diffuse = new Color3(.48, .58, .59);
-  ambient.groundColor = new Color3(.025, .03, .035);
+  ambient.intensity = lighting.ambientIntensity;
+  ambient.diffuse = Color3.FromArray(lighting.ambientDiffuse);
+  ambient.groundColor = Color3.FromArray(lighting.ambientGround);
 
   const keyLight = new DirectionalLight('crown-hall-key', new Vector3(.4, -1, .28), scene);
   keyLight.position = new Vector3(-6, 12, -8);
-  keyLight.intensity = .8;
-  keyLight.diffuse = new Color3(.82, .72, .55);
+  keyLight.intensity = lighting.keyIntensity;
+  keyLight.diffuse = Color3.FromArray(lighting.keyDiffuse);
 
   const qualityProfile = getQualityProfile();
   const shadowGenerator = new ShadowGenerator(qualityProfile.keyShadowMapSize, keyLight);
@@ -296,6 +298,7 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
 
   const input = new InputManager(canvas);
   const player = new Player(scene, shadowGenerator);
+  const playerVision = new PlayerVisionLight(scene, player);
   const cameraRig = new GameCamera(scene, player);
   const controller = new PlayerController(player, input, cameraRig.camera, collisionBoxes);
   const securityCameras = [
@@ -329,11 +332,25 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
   });
   const guardAnimation = new GuardAnimationController(guard, guardController, strength => {
     const surface = noise.surfaceAt(guard.position);
-    stealthAudio.playGuardFootstep(guard.position, player.position, hideController.state === 'HIDDEN', strength, surface);
+    stealthAudio.playGuardFootstep(
+      guard.position,
+      player.position,
+      hideController.state === 'HIDDEN',
+      strength,
+      surface,
+      guardController.fsmState === 'CHASE',
+    );
   });
   const guardBAnimation = new GuardAnimationController(guardB, guardBController, strength => {
     const surface = noise.surfaceAt(guardB.position);
-    stealthAudio.playGuardFootstep(guardB.position, player.position, hideController.state === 'HIDDEN', strength, surface);
+    stealthAudio.playGuardFootstep(
+      guardB.position,
+      player.position,
+      hideController.state === 'HIDDEN',
+      strength,
+      surface,
+      guardBController.fsmState === 'CHASE',
+    );
   });
   const hideController = new PlayerHideController(player, controller, cameraRig, lockers, {
     playDoor: opening => {
@@ -448,13 +465,11 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
   const loadedModel: AbstractMesh | null = null;
   onProgress(.92, 'MUSEUM AND LOCKDOWN ASSETS READY');
 
-  // StandardMaterial renders only four simultaneous lights by default. This
-  // scene can overlap ambient + key + crown/CCTV + two guard flashlights, so
-  // the second guard's beam could silently disappear. Eight keeps both
-  // gameplay flashlights visible while remaining below Babylon's common WebGL
-  // light limit and only affects meshes inside each light's range.
+  // StandardMaterial renders only four simultaneous lights by default. Dark
+  // museum lighting adds a player fill on top of ambient, key, crown/CCTV and
+  // both guard flashlights, so eight was no longer enough for overlapping rooms.
   scene.materials.forEach(material => {
-    if (material instanceof StandardMaterial) material.maxSimultaneousLights = 8;
+    if (material instanceof StandardMaterial) material.maxSimultaneousLights = 10;
   });
 
   // Static museum geometry never changes its transform. Freezing those world
@@ -559,6 +574,7 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
       }
       controller.update(deltaTime);
       playerAnimation.update(deltaTime, hideController.state, gameFlow.isHolding || gameFlow.phase === 'CROWN_STEAL');
+      playerVision.update(deltaTime, controller.isCrouching, hideController.state);
       noise.update(deltaTime);
       const heardNoise = guardHearing.update(noise);
       if (heardNoise) guardController.hearNoise(heardNoise.position, heardNoise.strength, heardNoise.kind);
@@ -746,6 +762,7 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
       museumMap.reset();
       controller.reset();
       playerAnimation.reset();
+      playerVision.reset();
       player.position.copyFromFloats(...MUSEUM_MAP_CONFIG.playerStart);
       player.root.rotation.y = 0;
       gameFlow.reset();
@@ -765,6 +782,7 @@ export async function createPrototypeScene(engine: Engine, canvas: HTMLCanvasEle
       guardBVision.dispose();
       guardFlashlight.dispose();
       guardBFlashlight.dispose();
+      playerVision.dispose();
       hideController.reset();
       stealthAudio.dispose();
       lockers.forEach(locker => locker.dispose());

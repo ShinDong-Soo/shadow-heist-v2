@@ -16,13 +16,15 @@ export const GUARD_CONFIG = {
   flashlight: {
     height: 1.38,
     forwardOffset: .3,
-    range: 8,
+    // Dark-museum values: the beam must stay readable past the player's local
+    // fill so patrol threats appear as approaching cones of light.
+    range: 9.2,
     warningRangeMultiplier: 1.3,
     chaseRangeMultiplier: 1.4,
-    warningIntensityMultiplier: 1.12,
+    warningIntensityMultiplier: 1.18,
     angle: 44 * Math.PI / 180,
-    intensity: 5.2,
-    exponent: 2.2,
+    intensity: 8.4,
+    exponent: 2.05,
     // At hand height this places the brightest ground area roughly 3.5-4.5m
     // ahead instead of near the far edge of the vision range.
     pitch: -.34,

@@ -28,7 +28,7 @@ export class SecurityCamera3D {
     this.light.diffuse = new Color3(.85, .045, .025);
     this.light.specular = new Color3(.2, .01, .005);
     this.light.range = 7;
-    this.light.intensity = .42;
+    this.light.intensity = .28;
     this.light.includedOnlyMeshes = scene.meshes.filter(mesh => mesh.name === 'museum-floor-security-corridor');
   }
 
@@ -37,7 +37,7 @@ export class SecurityCamera3D {
     const yaw = this.baseYaw + Math.sin(this.elapsed * .72) * .62;
     this.direction.copyFromFloats(Math.sin(yaw), -.34, Math.cos(yaw)).normalize();
     this.light.direction.copyFrom(this.direction);
-    this.light.intensity = alarmActive ? .12 : .42;
+    this.light.intensity = alarmActive ? .08 : .28;
     this.checkRemaining -= deltaTime;
     if (this.checkRemaining > 0) return;
     this.checkRemaining = .1;
